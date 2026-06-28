@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Store - متجر الإكسسوارات</title>
+    <link rel="stylesheet" href="store.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- ========== الهيدر ========== -->
+    <header class="store-header">
+        <div class="container">
+            <div class="header-content">
+                <div class="logo-section">
+                    <div class="logo-circle">Mi</div>
+                    <div class="logo-text">
+                        <h1>Mi Store</h1>
+                        <p>متجر الإكسسوارات الأصلية</p>
+                    </div>
+                </div>
+                <nav class="main-nav">
+                    <a href="#" class="nav-link active" data-section="home">الرئيسية</a>
+                    <a href="#" class="nav-link" data-section="accessories">الإكسسوارات</a>
+                    <a href="#" class="nav-link" data-section="offers">عروض اليوم</a>
+                    <a href="#" class="nav-link" data-section="bestsellers">الأكثر مبيعاً</a>
+                    <a href="#" class="nav-link" data-section="blog">المدونة</a>
+                    <a href="#" class="nav-link" data-section="about">من نحن</a>
+                    <a href="#" class="nav-link" data-section="contact">تواصل معنا</a>
+                </nav>
+                <div class="header-actions">
+                    <button class="cart-btn" onclick="app.toggleCart()">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="cart-count" id="cartCount">0</span>
+                    </button>
+                    <button class="lang-btn" onclick="app.toggleLanguage()">
+                        <i class="fas fa-globe"></i>
+                        <span>EN</span>
+                    </button>
+                    <button class="mobile-menu-btn" id="mobileMenuBtn">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ========== سلة المشتريات الجانبية ========== -->
+    <div class="cart-sidebar" id="cartSidebar">
+        <div class="cart-header">
+            <h3><i class="fas fa-shopping-cart"></i> سلة المشتريات</h3>
+            <button class="close-cart" onclick="app.toggleCart()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="cart-items" id="cartItems"></div>
+        <div class="cart-footer">
+            <div class="cart-total">
+                <span>الإجمالي:</span>
+                <strong id="cartTotal">0 د.ع</strong>
+            </div>
+            <button class="btn btn-primary btn-block" onclick="app.checkoutWhatsApp()">
+                <i class="fab fa-whatsapp"></i>
+                إتمام الطلب عبر واتساب
+            </button>
+            <button class="btn btn-outline btn-block" onclick="app.clearCart()">
+                <i class="fas fa-trash"></i>
+                تفريغ السلة
+            </button>
+        <div class="discount-code-section" style="margin-bottom: 15px; padding: 15px; background: var(--bg-light); border-radius: 8px;">
+    <label style="font-size: 13px; font-weight: 600; display: block; margin-bottom: 8px;">
+        <i class="fas fa-ticket-alt"></i> كود الخصم
+    </label>
+    <div style="display: flex; gap: 8px;">
+        <input type="text" id="discountCodeInput" class="form-input" placeholder="أدخل الكود" style="flex: 1; text-transform: uppercase;">
+        <button type="button" class="btn btn-primary" onclick="app.applyDiscountCode()" style="padding: 8px 15px;">
+            تطبيق
+        </button>
+    </div>
+    <div id="discountMessage" style="margin-top: 8px; font-size: 12px;"></div>
+</div>
+
+<div class="cart-discount-row" id="cartDiscountRow" style="display: none; padding: 8px 0; border-top: 1px dashed var(--border-color);">
+    <div style="display: flex; justify-content: space-between; font-size: 14px; color: var(--success);">
+        <span>الخصم المطبق:</span>
+        <strong id="cartDiscountAmount">0 د.ع</strong>
+    </div>
+</div>
+        </div>
+    </div>
+    <div class="cart-overlay" id="cartOverlay" onclick="app.toggleCart()"></div>
+
+    <!-- ========== القسم الرئيسي ========== -->
+    <section id="homeSection" class="section active">
+        <div class="hero-section">
+            <div class="container">
+                <div class="hero-content">
+                    <h2 data-translate="heroTitle">أفضل الإكسسوارات لهاتفك</h2>
+                    <p data-translate="heroSubtitle">كفرات، واقيات شاشة، شواحن، سماعات والمزيد</p>
+                    <div class="hero-search">
+                        <i class="fas fa-search"></i>
+                        <input type="text" id="heroSearch" placeholder="ابحث عن جهازك... مثال: Redmi Note 13">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- إحصائيات سريعة -->
+            <div class="stats-bar">
+                <div class="stat-item">
+                    <i class="fas fa-box"></i>
+                    <div>
+                        <strong id="totalProducts">0</strong>
+                        <span>منتج</span>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-users"></i>
+                    <div>
+                        <strong>1000+</strong>
+                        <span>عميل سعيد</span>
+                    </div>
+                </div>
+                <div class="stat-item">
+                    <i class="fas fa-truck"></i>
+                    <div>
+                        <strong>توصيل سريع</strong>
+                        <span>خلال 24 ساعة</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="categories-grid">
+                <div class="category-card" onclick="app.showSection('accessories', 'cases')">
+                    <div class="category-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                        <i class="fas fa-mobile-alt"></i>
+                    </div>
+                    <h3>الكفرات</h3>
+                    <p>كفرات حماية لجميع الأجهزة</p>
+                </div>
+                <div class="category-card" onclick="app.showSection('accessories', 'screen')">
+                    <div class="category-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                        <i class="fas fa-shield-alt"></i>
+                    </div>
+                    <h3>واقيات الشاشة</h3>
+                    <p>حماية كاملة لشاشة هاتفك</p>
+                </div>
+                <div class="category-card" onclick="app.showSection('accessories', 'accessories')">
+                    <div class="category-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
+                        <i class="fas fa-headphones"></i>
+                    </div>
+                    <h3>الملحقات</h3>
+                    <p>شواحن، سماعات، كابلات</p>
+                </div>
+                <div class="category-card" onclick="app.showSection('offers')">
+                    <div class="category-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">
+                        <i class="fas fa-fire"></i>
+                    </div>
+                    <h3>عروض اليوم</h3>
+                    <p>خصومات حصرية لفترة محدودة</p>
+                </div>
+            </div>
+
+            <!-- المنتجات المميزة -->
+            <div class="featured-products">
+                <h2 class="section-title">منتجات مميزة</h2>
+                <div class="products-grid" id="featuredProducts"></div>
+            </div>
+
+            <!-- وصل حديثاً -->
+            <div class="featured-products">
+                <h2 class="section-title">وصل حديثاً</h2>
+                <div class="products-grid" id="newArrivals"></div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ========== قسم الإكسسوارات ========== -->
+    <section id="accessoriesSection" class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2>الإكسسوارات</h2>
+                <div class="search-box">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="accessoriesSearch" placeholder="ابحث عن جهازك...">
+                </div>
+            </div>
+
+            <!-- الفلترة المتقدمة -->
+            <div class="advanced-filters">
+                <div class="filter-group">
+                    <label>الفئة:</label>
+                    <select id="categoryFilter" onchange="app.applyFilters()">
+                        <option value="all">الكل</option>
+                        <option value="cases">الكفرات</option>
+                        <option value="screen">واقيات الشاشة</option>
+                        <option value="accessories">الملحقات</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>السعر:</label>
+                    <select id="priceFilter" onchange="app.applyFilters()">
+                        <option value="all">الكل</option>
+                        <option value="0-10000">أقل من 10,000 د.ع</option>
+                        <option value="10000-50000">10,000 - 50,000 د.ع</option>
+                        <option value="50000-100000">50,000 - 100,000 د.ع</option>
+                        <option value="100000+">أكثر من 100,000 د.ع</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label>الترتيب:</label>
+                    <select id="sortFilter" onchange="app.applyFilters()">
+                        <option value="newest">الأحدث</option>
+                        <option value="price-asc">السعر: من الأقل للأعلى</option>
+                        <option value="price-desc">السعر: من الأعلى للأقل</option>
+                        <option value="rating">الأعلى تقييماً</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="sub-categories">
+                <button class="sub-cat-btn active" data-cat="all">الكل</button>
+                <button class="sub-cat-btn" data-cat="cases">الكفرات</button>
+                <button class="sub-cat-btn" data-cat="screen">واقيات الشاشة</button>
+                <button class="sub-cat-btn" data-cat="accessories">الملحقات</button>
+            </div>
+
+            <div class="products-grid" id="accessoriesProducts"></div>
+        </div>
+    </section>
+
+    <!-- ========== قسم الأكثر مبيعاً ========== -->
+    <section id="bestsellersSection" class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2>🔥 الأكثر مبيعاً</h2>
+                <p class="section-subtitle">المنتجات الأكثر طلباً هذا الأسبوع</p>
+            </div>
+            <div class="products-grid" id="bestsellersProducts"></div>
+        </div>
+    </section>
+
+    <!-- ========== قسم عروض اليوم ========== -->
+    <section id="offersSection" class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2>🔥 عروض اليوم</h2>
+                <p class="section-subtitle">خصومات حصرية لفترة محدودة</p>
+            </div>
+
+            <div class="offers-banner">
+                <div class="offer-highlight">
+                    <i class="fas fa-clock"></i>
+                    <span>العرض ينتهي خلال:</span>
+                    <div class="countdown" id="countdown">23:59:59</div>
+                </div>
+            </div>
+
+            <div class="products-grid" id="offersProducts"></div>
+        </div>
+    </section>
+
+    <!-- ========== قسم المدونة ========== -->
+    <section id="blogSection" class="section">
+        <div class="container">
+            <div class="section-header">
+                <h2>📝 المدونة</h2>
+                <p class="section-subtitle">نصائح ومقالات مفيدة</p>
+            </div>
+
+            <div class="blog-grid" id="blogPosts"></div>
+        </div>
+    </section>
+
+    <!-- ========== قسم من نحن ========== -->
+    <section id="aboutSection" class="section">
+    <div class="container">
+        <!-- Hero Section لمن نحن -->
+        <div class="about-hero">
+            <div class="about-hero-content">
+                <h1 id="aboutTitleDisplay">من نحن</h1>
+                <p id="aboutDescriptionDisplay">متجر متخصص في إكسسوارات الهواتف الأصلية</p>
+            </div>
+        </div>
+
+        <!-- الصور والمميزات -->
+        <div class="about-gallery">
+            <div class="about-image-card">
+                <div class="about-image-placeholder">
+                    <i class="fas fa-store"></i>
+                </div>
+                <div class="about-image-info">
+                    <h3>متجرنا</h3>
+                    <p>نستقبلكم في أجواء مريحة</p>
+                </div>
+            </div>
+            
+            <div class="about-image-card">
+                <div class="about-image-placeholder" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                    <i class="fas fa-box-open"></i>
+                </div>
+                <div class="about-image-info">
+                    <h3>منتجاتنا</h3>
+                    <p>تشكيلة واسعة من الإكسسوارات</p>
+                </div>
+            </div>
+            
+            <div class="about-image-card">
+                <div class="about-image-placeholder" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                    <i class="fas fa-handshake"></i>
+                </div>
+                <div class="about-image-info">
+                    <h3>ثقة العملاء</h3>
+                    <p>آلاف العملاء السعداء</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- المميزات -->
+        <div class="about-features-section">
+            <h2 class="section-title">لماذا تختار Mi Store؟</h2>
+            <div class="about-features" id="aboutFeaturesDisplay">
+                <!-- يتم ملؤها ديناميكياً -->
+            </div>
+        </div>
+
+        <!-- الإحصائيات -->
+        <div class="about-stats-section">
+            <div class="about-stats" id="aboutStatsDisplay">
+                <!-- يتم ملؤها ديناميكياً -->
+            </div>
+        </div>
+    </div>
+</section>
+
+    <!-- ========== قسم تواصل معنا ========== -->
+    <section id="contactSection" class="section">
+    <div class="container">
+        <div class="contact-container">
+            <div class="contact-info">
+                <h2>تواصل معنا</h2>
+                <p style="color: var(--text-muted); line-height: 1.8; margin-bottom: 30px; font-size: 16px;">
+                    نحن هنا لخدمتك! اختر الطريقة المناسبة للتواصل معنا وسنرد عليك في أسرع وقت.
+                </p>
+                
+                <div class="contact-buttons-grid">
+                    <!-- زر الاتصال المباشر -->
+                    <a href="tel:07738414085" id="phoneContactBtn" class="contact-action-btn phone-btn">
+                        <div class="contact-btn-icon">
+                            <i class="fas fa-phone-alt"></i>
+                        </div>
+                        <div class="contact-btn-text">
+                            <h4>اتصال مباشر</h4>
+                            <p>اضغط للاتصال بنا فوراً</p>
+                        </div>
+                        <div class="contact-btn-arrow">
+                            <i class="fas fa-arrow-left"></i>
+                        </div>
+                    </a>
+                    
+                    <!-- زر الواتساب -->
+                    <a href="#" id="whatsappContactBtn" target="_blank" class="contact-action-btn whatsapp-btn-style">
+                        <div class="contact-btn-icon">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <div class="contact-btn-text">
+                            <h4>واتساب</h4>
+                            <p>راسلنا عبر واتساب</p>
+                        </div>
+                        <div class="contact-btn-arrow">
+                            <i class="fas fa-arrow-left"></i>
+                        </div>
+                    </a>
+                    
+                    <!-- زر الدردشة -->
+                    <button class="contact-action-btn chat-btn-style" onclick="app.toggleChat()">
+                        <div class="contact-btn-icon">
+                            <i class="fas fa-comments"></i>
+                        </div>
+                        <div class="contact-btn-text">
+                            <h4>دردشة مباشرة</h4>
+                            <p>تحدث معنا الآن</p>
+                        </div>
+                        <div class="contact-btn-arrow">
+                            <i class="fas fa-arrow-left"></i>
+                        </div>
+                    </button>
+                    
+                    <!-- زر البريد الإلكتروني -->
+                    <a href="mailto:info@mistore.com" class="contact-action-btn email-btn">
+                        <div class="contact-btn-icon">
+                            <i class="fas fa-envelope"></i>
+                        </div>
+                        <div class="contact-btn-text">
+                            <h4>البريد الإلكتروني</h4>
+                            <p>أرسل لنا إيميل</p>
+                        </div>
+                        <div class="contact-btn-arrow">
+                            <i class="fas fa-arrow-left"></i>
+                        </div>
+                    </a>
+                </div>
+            </div>
+            
+            <div class="contact-form-section">
+                <h3>📩 دردشة سريعة</h3>
+                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px;">
+                    أرسل لنا رسالة وسنرد عليك في أقرب وقت
+                </p>
+                <form id="contactForm">
+                    <div class="form-group">
+                        <label>الاسم</label>
+                        <input type="text" class="form-input" id="contactName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>رقم الهاتف</label>
+                        <input type="tel" class="form-input" id="contactPhone" required>
+                    </div>
+                    <div class="form-group">
+                        <label>الرسالة</label>
+                        <textarea class="form-textarea" id="contactMessage" rows="4" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <i class="fas fa-paper-plane"></i>
+                        إرسال
+                    </button>
+                </form>
+                
+                <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border-color);">
+                
+                <h3>💬 دردشة مباشرة</h3>
+                <form id="footerChatForm">
+                    <div class="form-group">
+                        <label>اسمك</label>
+                        <input type="text" class="form-input" id="chatName" required>
+                    </div>
+                    <div class="form-group">
+                        <label>رقم هاتفك</label>
+                        <input type="tel" class="form-input" id="chatPhone" required>
+                    </div>
+                    <div class="form-group">
+                        <label>رسالتك</label>
+                        <textarea class="form-textarea" id="chatMessage" rows="3" required></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-success btn-block">
+                        <i class="fas fa-paper-plane"></i>
+                        إرسال عبر الشات
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</section>
+
+    <!-- ========== نافذة تفاصيل المنتج ========== -->
+    <div class="modal-overlay" id="productModal">
+        <div class="modal modal-large">
+            <button class="modal-close" onclick="app.closeModal()">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="modal-content" id="modalContent"></div>
+        </div>
+    </div>
+
+    <!-- ========== الشات المباشر ========== -->
+    <div class="chat-widget" id="chatWidget">
+        <div class="chat-header" onclick="app.toggleChat()">
+            <i class="fas fa-comments"></i>
+            <span>الدردشة المباشرة</span>
+            <button class="chat-close" onclick="event.stopPropagation(); app.toggleChat()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div class="chat-body" id="chatBody">
+            <div class="chat-message bot">
+                <p>مرحباً! كيف يمكنني مساعدتك؟</p>
+            </div>
+        </div>
+        <div class="chat-input">
+            <input type="text" id="chatInput" placeholder="اكتب رسالتك...">
+            <button onclick="app.sendMessage()"><i class="fas fa-paper-plane"></i></button>
+        </div>
+    </div>
+    <button class="chat-toggle-btn" onclick="app.toggleChat()">
+        <i class="fas fa-comments"></i>
+    </button>
+
+    <!-- ========== زر الواتساب ========== -->
+    <a href="#" class="whatsapp-btn" id="whatsappBtn" target="_blank">
+        <i class="fab fa-whatsapp"></i>
+    </a>
+
+    <!-- ========== الفوتر ========== -->
+    <footer class="store-footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <h3>Mi Store</h3>
+                    <p>متجر متخصص في بيع إكسسوارات الهواتف الأصلية</p>
+                    <div class="payment-methods">
+                        <i class="fas fa-money-bill-wave"></i>
+                        <span>الدفع عند الاستلام</span>
+                    </div>
+                </div>
+                <div class="footer-section">
+                    <h4>روابط سريعة</h4>
+                    <ul>
+                        <li><a href="#" onclick="app.showSection('home')">الرئيسية</a></li>
+                        <li><a href="#" onclick="app.showSection('accessories')">الإكسسوارات</a></li>
+                        <li><a href="#" onclick="app.showSection('offers')">عروض اليوم</a></li>
+                        <li><a href="#" onclick="app.showSection('blog')">المدونة</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>خدمة العملاء</h4>
+                    <ul>
+                        <li><a href="#" onclick="app.showSection('about')">من نحن</a></li>
+                        <li><a href="#" onclick="app.showSection('contact')">تواصل معنا</a></li>
+                        <li><a href="#">الأسئلة الشائعة</a></li>
+                        <li><a href="#">سياسة الإرجاع</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>تواصل معنا</h4>
+                    <p><i class="fas fa-phone"></i> <span id="footerPhone">07700000000</span></p>
+                    <div class="social-links">
+                        <a href="#" class="social-link"><i class="fab fa-facebook"></i></a>
+                        <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
+                        <a href="#" class="social-link"><i class="fab fa-whatsapp"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>© 2026 Mi Store - جميع الحقوق محفوظة</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="store.js"></script>
+</body>
+</html>

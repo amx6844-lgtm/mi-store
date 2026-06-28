@@ -1,0 +1,842 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mi Store - نظام إدارة المحل المتكامل</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- ========== صفحة تسجيل الدخول ========== -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="login-box">
+                <div class="logo-section">
+                    <div class="logo-circle">
+                        <span class="logo-text">Mi</span>
+                    </div>
+                    <h1>Mi Store</h1>
+                    <p class="subtitle">نظام إدارة المحل المتكامل</p>
+                </div>
+
+                <form id="loginForm" class="login-form" onsubmit="event.preventDefault(); app.handleLogin(event);">
+    <div class="input-group">
+        <label for="username">
+            <i class="fas fa-user"></i>
+            اسم المستخدم
+        </label>
+        <input 
+            type="text" 
+            id="username" 
+            name="username" 
+            placeholder="أدخل اسم المستخدم"
+            required
+            autocomplete="username"
+        >
+        <span class="error-message" id="usernameError"></span>
+    </div>
+
+    <div class="input-group">
+        <label for="password">
+            <i class="fas fa-lock"></i>
+            كلمة المرور
+        </label>
+        <div class="password-wrapper">
+            <input 
+                type="password" 
+                id="password" 
+                name="password" 
+                placeholder="أدخل كلمة المرور"
+                required
+                autocomplete="current-password"
+            >
+            <button type="button" class="toggle-password" id="togglePassword">
+                <i class="fas fa-eye"></i>
+            </button>
+        </div>
+        <span class="error-message" id="passwordError"></span>
+    </div>
+
+    <div class="remember-me">
+        <label class="checkbox-label">
+            <input type="checkbox" id="rememberMe">
+            <span class="checkmark"></span>
+            تذكرني
+        </label>
+    </div>
+
+    <button type="submit" class="login-btn" id="loginBtn">
+        <span class="btn-text">تسجيل الدخول</span>
+        <i class="fas fa-arrow-left"></i>
+        <span class="spinner"></span>
+    </button>
+
+    <div class="login-message" id="loginMessage"></div>
+</form>
+
+                <div class="default-credentials">
+                    <p><i class="fas fa-info-circle"></i> بيانات الدخول الافتراضية:</p>
+                    <div class="credentials-box">
+                        <div class="cred-item">
+                            <span>المستخدم:</span>
+                            <strong>admin</strong>
+                        </div>
+                        <div class="cred-item">
+                            <span>كلمة المرور:</span>
+                            <strong>admin123</strong>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="footer">
+                    <p>© 2026 Mi Store - جميع الحقوق محفوظة</p>
+                </div>
+            </div>
+
+            <div class="background-decoration">
+                <div class="circle circle-1"></div>
+                <div class="circle circle-2"></div>
+                <div class="circle circle-3"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== لوحة التحكم الرئيسية ========== -->
+    <div id="dashboardPage" class="page">
+        <!-- الشريط الجانبي -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <div class="logo-icon">Mi</div>
+                    <div class="logo-text">
+                        <h2>Mi Store</h2>
+                        <small>نظام الإدارة</small>
+                    </div>
+                </div>
+                <button class="sidebar-toggle" id="sidebarToggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+
+            <nav class="sidebar-nav">
+                <ul>
+                    <li class="nav-item active" data-page="dashboard">
+                        <a href="#"><i class="fas fa-home"></i><span>الرئيسية</span></a>
+                    </li>
+                    <li class="nav-item" data-page="products">
+                        <a href="#"><i class="fas fa-box"></i><span>المنتجات</span></a>
+                    </li>
+                    <li class="nav-item" data-page="inventory">
+                        <a href="#"><i class="fas fa-warehouse"></i><span>المخزون</span></a>
+                    </li>
+                    <li class="nav-item" data-page="sales">
+                        <a href="#"><i class="fas fa-cash-register"></i><span>المبيعات</span></a>
+                    </li>
+                    <li class="nav-item" data-page="purchases">
+                        <a href="#"><i class="fas fa-truck-loading"></i><span>المشتريات</span></a>
+                    </li>
+                    <li class="nav-item" data-page="suppliers">
+                        <a href="#"><i class="fas fa-industry"></i><span>الموردين</span></a>
+                    </li>
+                    <li class="nav-item" data-page="customers">
+                        <a href="#"><i class="fas fa-users"></i><span>العملاء</span></a>
+                    </li>
+                    <li class="nav-item" data-page="discounts">
+                        <a href="#"><i class="fas fa-ticket-alt"></i><span>أكواد الخصم</span></a>
+                    </li>
+                    <li class="nav-item" data-page="offers">
+                        <a href="#"><i class="fas fa-fire"></i><span>عروض اليوم</span></a>
+                    </li>
+                    <li class="nav-item" data-page="chat">
+                        <a href="#"><i class="fas fa-comments"></i><span>المحادثات</span></a>
+                    </li>
+                    <li class="nav-item" data-page="printing">
+                        <a href="#"><i class="fas fa-print"></i><span>الطباعة</span></a>
+                    </li>
+                    <li class="nav-item" data-page="reports">
+                        <a href="#"><i class="fas fa-chart-line"></i><span>التقارير</span></a>
+                    </li>
+                    <li class="nav-item" data-page="settings">
+                        <a href="#"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
+                    </li>
+                </ul>
+            </nav>
+
+            <div class="sidebar-footer">
+                <button class="logout-btn" id="logoutBtn">
+                    <i class="fas fa-sign-out-alt"></i>
+                    <span>تسجيل الخروج</span>
+                </button>
+            </div>
+        </aside>
+
+        <!-- المحتوى الرئيسي -->
+        <main class="main-content" id="mainContent">
+            <!-- الشريط العلوي -->
+            <header class="topbar">
+                <div class="topbar-right">
+                    <button class="menu-toggle" id="menuToggle">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h1 class="page-title" id="pageTitle">الرئيسية</h1>
+                </div>
+                <div class="topbar-left">
+                    <div class="search-box">
+                        <i class="fas fa-search"></i>
+                        <input type="text" placeholder="بحث سريع..." id="globalSearch">
+                    </div>
+                    <div class="topbar-actions">
+                        <button class="icon-btn" id="notificationsBtn" onclick="app.navigateTo('chat')">
+                            <i class="fas fa-bell"></i>
+                            <span class="badge" id="notificationsBadge">0</span>
+                        </button>
+                        <div class="user-menu">
+                            <div class="user-avatar" id="userAvatar">A</div>
+                            <div class="user-info">
+                                <span class="user-name" id="userName">المدير</span>
+                                <span class="user-role">مدير النظام</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </header>
+
+            <!-- محتوى الصفحات -->
+            <div class="page-content" id="pageContent">
+                <!-- صفحة الرئيسية -->
+                <div id="dashboardContent" class="content-section active">
+                    <div class="stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #667eea, #764ba2);">
+                                <i class="fas fa-box"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalProducts">0</h3>
+                                <p>إجمالي المنتجات</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #f093fb, #f5576c);">
+                                <i class="fas fa-shopping-cart"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalSales">0</h3>
+                                <p>المبيعات اليوم</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #4facfe, #00f2fe);">
+                                <i class="fas fa-dollar-sign"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalRevenue">0</h3>
+                                <p>الإيرادات (د.ع)</p>
+                            </div>
+                        </div>
+                        <div class="stat-card">
+                            <div class="stat-icon" style="background: linear-gradient(135deg, #43e97b, #38f9d7);">
+                                <i class="fas fa-users"></i>
+                            </div>
+                            <div class="stat-info">
+                                <h3 id="totalCustomers">0</h3>
+                                <p>العملاء</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="dashboard-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>أحدث المبيعات</h3>
+                                <button class="btn btn-sm" onclick="app.navigateTo('sales')">عرض الكل</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="recentSalesList" class="list-container"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>منتجات منخفضة المخزون</h3>
+                                <button class="btn btn-sm" onclick="app.navigateTo('inventory')">عرض الكل</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="lowStockList" class="list-container"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>آخر المحادثات</h3>
+                                <button class="btn btn-sm" onclick="app.navigateTo('chat')">عرض الكل</button>
+                            </div>
+                            <div class="card-body">
+                                <div id="recentChatsList" class="list-container"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة المنتجات -->
+                 <!-- زر فحص الصور (للتجربة) -->
+<button onclick="app.debugImages()" style="position:fixed;bottom:20px;left:20px;background:#FF6700;color:white;padding:15px 20px;border:none;border-radius:50px;cursor:pointer;z-index:9999;box-shadow:0 4px 12px rgba(0,0,0,0.3);">
+    🔍 فحص الصور
+</button>
+                <div id="productsContent" class="content-section">
+                    <div class="page-header">
+                        <h2>إدارة المنتجات</h2>
+                        <button class="btn btn-primary" onclick="app.showAddProductModal()">
+                            <i class="fas fa-plus"></i>
+                            إضافة منتج جديد
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="search-filter">
+                                <input type="text" id="productSearch" placeholder="بحث عن منتج..." class="search-input">
+                                <select id="categoryFilter" class="filter-select">
+                                    <option value="">جميع الفئات</option>
+                                    <option value="phones">هواتف</option>
+                                    <option value="accessories">إكسسوارات</option>
+                                    <option value="chargers">شواحن</option>
+                                    <option value="cases">كفرات</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="productsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>الكود</th>
+                                            <th>اسم المنتج</th>
+                                            <th>الفئة</th>
+                                            <th>سعر الشراء</th>
+                                            <th>سعر البيع</th>
+                                            <th>الكمية</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="productsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة المخزون -->
+                <div id="inventoryContent" class="content-section">
+                    <div class="page-header">
+                        <h2>إدارة المخزون</h2>
+                        <div class="header-actions">
+                            <button class="btn btn-success" onclick="app.showStockInModal()">
+                                <i class="fas fa-arrow-down"></i>
+                                وارد
+                            </button>
+                            <button class="btn btn-warning" onclick="app.showStockOutModal()">
+                                <i class="fas fa-arrow-up"></i>
+                                صادر
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="inventoryTable">
+                                    <thead>
+                                        <tr>
+                                            <th>الكود</th>
+                                            <th>المنتج</th>
+                                            <th>الرصيد الحالي</th>
+                                            <th>الحد الأدنى</th>
+                                            <th>الحالة</th>
+                                            <th>آخر تحديث</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="inventoryTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة المبيعات -->
+                <div id="salesContent" class="content-section">
+                    <div class="page-header">
+                        <h2>المبيعات والفواتير</h2>
+                        <button class="btn btn-primary" onclick="app.showNewSaleModal()">
+                            <i class="fas fa-plus"></i>
+                            فاتورة جديدة
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="salesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>رقم الفاتورة</th>
+                                            <th>التاريخ</th>
+                                            <th>العميل</th>
+                                            <th>الإجمالي</th>
+                                            <th>الحالة</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="salesTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة المشتريات -->
+                <div id="purchasesContent" class="content-section">
+                    <div class="page-header">
+                        <h2>المشتريات</h2>
+                        <button class="btn btn-primary" onclick="app.showNewPurchaseModal()">
+                            <i class="fas fa-plus"></i>
+                            فاتورة شراء جديدة
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="purchasesTable">
+                                    <thead>
+                                        <tr>
+                                            <th>رقم الفاتورة</th>
+                                            <th>التاريخ</th>
+                                            <th>المورد</th>
+                                            <th>الإجمالي</th>
+                                            <th>الحالة</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="purchasesTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة الموردين -->
+                <div id="suppliersContent" class="content-section">
+                    <div class="page-header">
+                        <h2>الموردين</h2>
+                        <button class="btn btn-primary" onclick="app.showAddSupplierModal()">
+                            <i class="fas fa-plus"></i>
+                            إضافة مورد
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="suppliersTable">
+                                    <thead>
+                                        <tr>
+                                            <th>الكود</th>
+                                            <th>اسم المورد</th>
+                                            <th>الهاتف</th>
+                                            <th>العنوان</th>
+                                            <th>الرصيد</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="suppliersTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة العملاء -->
+                <div id="customersContent" class="content-section">
+                    <div class="page-header">
+                        <h2>العملاء</h2>
+                        <button class="btn btn-primary" onclick="app.showAddCustomerModal()">
+                            <i class="fas fa-plus"></i>
+                            إضافة عميل
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="customersTable">
+                                    <thead>
+                                        <tr>
+                                            <th>الكود</th>
+                                            <th>اسم العميل</th>
+                                            <th>الهاتف</th>
+                                            <th>العنوان</th>
+                                            <th>الرصيد</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="customersTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة أكواد الخصم -->
+                <div id="discountsContent" class="content-section">
+                    <div class="page-header">
+                        <h2>أكواد الخصم</h2>
+                        <button class="btn btn-primary" onclick="app.showAddDiscountModal()">
+                            <i class="fas fa-plus"></i>
+                            إنشاء كود خصم
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="table-container">
+                                <table class="data-table" id="discountsTable">
+                                    <thead>
+                                        <tr>
+                                            <th>الكود</th>
+                                            <th>نسبة الخصم</th>
+                                            <th>الحد الأقصى للاستخدام</th>
+                                            <th>عدد الاستخدامات</th>
+                                            <th>تاريخ الانتهاء</th>
+                                            <th>الحالة</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="discountsTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة عروض اليوم -->
+                <div id="offersContent" class="content-section">
+                    <div class="page-header">
+                        <h2>عروض اليوم</h2>
+                        <button class="btn btn-primary" onclick="app.showAddOfferModal()">
+                            <i class="fas fa-plus"></i>
+                            إضافة عرض
+                        </button>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="offer-settings">
+                                <div class="form-group">
+                                    <label>عنوان العرض الرئيسي</label>
+                                    <input type="text" id="offerTitle" class="form-input" placeholder="مثال: عروض الصيف">
+                                </div>
+                                <div class="form-row">
+                                    <div class="form-group">
+                                        <label>وقت البدء</label>
+                                        <input type="datetime-local" id="offerStart" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>وقت الانتهاء</label>
+                                        <input type="datetime-local" idofferEnd" class="form-input">
+                                    </div>
+                                    <div class="form-group">
+    <label>صورة المنتج</label>
+    <input type="file" id="pImage" class="form-input" accept="image/*" onchange="app.previewImage(this)">
+    <div id="imagePreview" style="margin-top: 10px; display: none;">
+        <img id="previewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px; border: 2px solid var(--border-color);">
+    </div>
+</div>
+                                </div>
+                                <button class="btn btn-success" onclick="app.saveOfferSettings()">
+                                    <i class="fas fa-save"></i>
+                                    حفظ الإعدادات
+                                </button>
+                            </div>
+                            
+                            <h3 style="margin: 30px 0 15px; font-size: 18px;">المنتجات في العروض</h3>
+                            <div class="table-container">
+                                <table class="data-table" id="offersTable">
+                                    <thead>
+                                        <tr>
+                                            <th>المنتج</th>
+                                            <th>السعر الأصلي</th>
+                                            <th>نسبة الخصم</th>
+                                            <th>السعر بعد الخصم</th>
+                                            <th>الإجراءات</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="offersTableBody"></tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة المحادثات -->
+                <div id="chatContent" class="content-section">
+                    <div class="page-header">
+                        <h2>المحادثات</h2>
+                    </div>
+                    <div class="chat-container">
+                        <div class="chat-list">
+                            <div class="chat-list-header">
+                                <h3>المحادثات</h3>
+                                <span class="chat-count" id="chatCount">0</span>
+                            </div>
+                            <div class="chat-list-items" id="chatListItems"></div>
+                        </div>
+                        <div class="chat-window">
+                            <div class="chat-window-header" id="chatWindowHeader">
+                                <div class="chat-user-info">
+                                    <div class="chat-user-avatar" id="chatUserAvatar">?</div>
+                                    <div>
+                                        <h4 id="chatUserName">اختر محادثة</h4>
+                                        <span class="chat-status" id="chatUserStatus">--</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="chat-messages" id="chatMessages">
+                                <div class="empty-chat">
+                                    <i class="fas fa-comments"></i>
+                                    <p>اختر محادثة من القائمة للبدء</p>
+                                </div>
+                            </div>
+                            <div class="chat-input-area" id="chatInputArea" style="display: none;">
+                                <input type="text" id="chatReplyInput" placeholder="اكتب ردك..." class="chat-input">
+                                <button class="btn btn-primary" onclick="app.sendReply()">
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة الطباعة -->
+                <div id="printingContent" class="content-section">
+                    <div class="page-header">
+                        <h2>الطباعة</h2>
+                    </div>
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="printing-options">
+                                <div class="print-option">
+                                    <i class="fas fa-file-invoice"></i>
+                                    <h3>طباعة فاتورة</h3>
+                                    <p>طباعة فاتورة مبيعات أو مشتريات</p>
+                                    <button class="btn btn-primary" onclick="app.showPrintInvoiceModal()">اختر فاتورة</button>
+                                </div>
+                                <div class="print-option">
+                                    <i class="fas fa-barcode"></i>
+                                    <h3>طباعة باركود</h3>
+                                    <p>طباعة باركود للمنتجات</p>
+                                    <button class="btn btn-primary" onclick="app.showPrintBarcodeModal()">اختر منتج</button>
+                                </div>
+                                <div class="print-option">
+                                    <i class="fas fa-list"></i>
+                                    <h3>طباعة تقرير</h3>
+                                    <p>طباعة تقارير المبيعات والمخزون</p>
+                                    <button class="btn btn-primary" onclick="app.showPrintReportModal()">اختر تقرير</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة التقارير -->
+                <div id="reportsContent" class="content-section">
+                    <div class="page-header">
+                        <h2>التقارير</h2>
+                    </div>
+                    <div class="reports-grid">
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>تقرير المبيعات</h3>
+                            </div>
+                            <div class="card-body">
+                                <div class="report-filters">
+                                    <select id="salesReportPeriod" class="filter-select">
+                                        <option value="today">اليوم</option>
+                                        <option value="week">هذا الأسبوع</option>
+                                        <option value="month">هذا الشهر</option>
+                                        <option value="year">هذه السنة</option>
+                                    </select>
+                                    <button class="btn btn-primary" onclick="app.generateSalesReport()">عرض التقرير</button>
+                                </div>
+                                <div id="salesReportContent" class="report-content"></div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card-header">
+                                <h3>تقرير المخزون</h3>
+                            </div>
+                            <div class="card-body">
+                                <div id="inventoryReportContent" class="report-content"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- صفحة الإعدادات -->
+                <div id="settingsContent" class="content-section">
+    <div class="page-header">
+        <h2>الإعدادات</h2>
+    </div>
+    
+    <!-- تبويبات الإعدادات -->
+    <div class="settings-tabs">
+        <button class="tab-btn active" onclick="app.showSettingsTab('general')">
+            <i class="fas fa-cog"></i> إعدادات عامة
+        </button>
+        <button class="tab-btn" onclick="app.showSettingsTab('about')">
+            <i class="fas fa-info-circle"></i> من نحن
+        </button>
+    </div>
+    
+    <!-- الإعدادات العامة -->
+    <div id="generalSettings" class="settings-tab-content active">
+        <div class="card">
+            <div class="card-body">
+                <form id="settingsForm" class="settings-form">
+                    <div class="form-group">
+                        <label>اسم المحل</label>
+                        <input type="text" id="storeName" value="Mi Store" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>العنوان</label>
+                        <input type="text" id="storeAddress" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>رقم الهاتف</label>
+                        <input type="tel" id="storePhone" class="form-input">
+                    </div>
+                    <div class="form-group">
+                        <label>العملة</label>
+                        <select id="currency" class="form-input">
+                            <option value="IQD">دينار عراقي</option>
+                            <option value="USD">دولار أمريكي</option>
+                            <option value="EUR">يورو</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>الضريبة (%)</label>
+                        <input type="number" id="taxRate" value="0" min="0" max="100" class="form-input">
+                    </div>
+                    <button type="submit" class="btn btn-primary">حفظ الإعدادات</button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <!-- من نحن -->
+    <div id="aboutSettings" class="settings-tab-content">
+        <div class="card">
+            <div class="card-header">
+                <h3>معلومات "من نحن" - تظهر في موقع الزبائن</h3>
+            </div>
+            <div class="card-body">
+                <form id="aboutForm" class="settings-form">
+                    <div class="form-group">
+                        <label>عنوان القسم الرئيسي</label>
+                        <input type="text" id="aboutTitle" class="form-input" placeholder="مثال: من نحن">
+                    </div>
+                    <div class="form-group">
+                        <label>الوصف التعريفي بالمحل</label>
+                        <textarea id="aboutDescription" class="form-textarea" rows="4" placeholder="اكتب وصفاً مختصراً عن محلك..."></textarea>
+                    </div>
+                    
+                    <h4 style="margin: 20px 0 15px; color: var(--text-primary);">المميزات (4 مميزات)</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الميزة 1 - العنوان</label>
+                            <input type="text" id="feature1Title" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>الميزة 1 - الوصف</label>
+                            <input type="text" id="feature1Desc" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الميزة 2 - العنوان</label>
+                            <input type="text" id="feature2Title" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>الميزة 2 - الوصف</label>
+                            <input type="text" id="feature2Desc" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الميزة 3 - العنوان</label>
+                            <input type="text" id="feature3Title" class="form-input">
+                        </div>
+
+                        <div class="form-group">
+                            <label>الميزة 3 - الوصف</label>
+                            <input type="text" id="feature3Desc" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>الميزة 4 - العنوان</label>
+                            <input type="text" id="feature4Title" class="form-input">
+                        </div>
+                        <div class="form-group">
+                            <label>الميزة 4 - الوصف</label>
+                            <input type="text" id="feature4Desc" class="form-input">
+                        </div>
+                    </div>
+                    
+                    <h4 style="margin: 20px 0 15px; color: var(--text-primary);">الإحصائيات</h4>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>سنوات الخبرة</label>
+                            <input type="text" id="statYears" class="form-input" placeholder="مثال: 5+ سنوات">
+                        </div>
+                        <div class="form-group">
+                            <label>عدد العملاء</label>
+                            <input type="text" id="statCustomers" class="form-input" placeholder="مثال: 1000+">
+                        </div>
+                        <div class="form-group">
+                            <label>عدد المنتجات</label>
+                            <input type="text" id="statProducts" class="form-input" placeholder="مثال: 500+">
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i>
+                        حفظ معلومات "من نحن"
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+            </div>
+        </main>
+    </div>
+
+    <!-- النوافذ المنبثقة -->
+    <div class="modal-overlay" id="modalOverlay">
+        <div class="modal" id="modal">
+            <div class="modal-header">
+                <h3 class="modal-title" id="modalTitle">عنوان</h3>
+                <button class="modal-close" id="modalClose">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer" id="modalFooter"></div>
+        </div>
+    </div>
+
+    <!-- الإشعارات -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
