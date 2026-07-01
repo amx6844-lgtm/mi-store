@@ -536,7 +536,25 @@
             </div>
         </div>
     </footer>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
 
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCBGRZ3jyQz2wAIsAJ7xnYwF9vO748USEE",
+    authDomain: "mi-store-f7924.firebaseapp.com",
+    projectId: "mi-store-f7924",
+    storageBucket: "mi-store-f7924.appspot.com",
+    messagingSenderId: "204760415600",
+    appId: "1:204760415600:web:41068f63aed8d905db23b5"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  
+  console.log('✅ تم الاتصال بـ Firebase في موقع الزبائن');
+</script>
     <script src="store.js"></script>
 </body>
 </html>
