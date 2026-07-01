@@ -25,6 +25,38 @@ class StorageManager {
 class StoreApp {
     checkProductImages() {
     const products = this.storage.get('products', []);
+    console.log('=================================');
+    console.log('📦 فحص صور المنتجات في موقع الزبائن');
+    console.log('=================================');
+    console.log('عدد المنتجات:', products.length);
+    
+    let withImage = 0;
+    let withoutImage = 0;
+    let invalidImage = 0;
+    
+    products.forEach((product, index) => {
+        if (product.image) {
+            if (typeof product.image === 'string' && product.image.length > 100) {
+                withImage++;
+                console.log(`✅ ${index + 1}. ${product.name} - صورة صالحة (${(product.image.length / 1024).toFixed(2)} KB)`);
+            } else {
+                invalidImage++;
+                console.log(`⚠️ ${index + 1}. ${product.name} - صورة غير صالحة`);
+            }
+        } else {
+            withoutImage++;
+            console.log(`❌ ${index + 1}. ${product.name} - بدون صورة`);
+        }
+    });
+    
+    console.log('---------------------------------');
+    console.log(`المنتجات مع صور صالحة: ${withImage}`);
+    console.log(`المنتجات بدون صور: ${withoutImage}`);
+    console.log(`المنتجات مع صور غير صالحة: ${invalidImage}`);
+    console.log('=================================');
+}
+    checkProductImages() {
+    const products = this.storage.get('products', []);
     console.log('📦 عدد المنتجات:', products.length);
     
     products.forEach((product, index) => {
@@ -573,7 +605,7 @@ if (chatForm) {
         container.innerHTML = products.map(p => this.createProductCard(p, badgeType)).join('');
     }
 
-    createProductCard(product, badgeType = null) {
+   createProductCard(product, badgeType = null) {
     const categoryNames = { phones: 'هواتف', accessories: 'إكسسوارات', chargers: 'شواحن', cases: 'كفرات', screen: 'واقيات شاشة' };
     const icons = { phones: 'fa-mobile-alt', accessories: 'fa-headphones', chargers: 'fa-charging-station', cases: 'fa-mobile', screen: 'fa-shield-alt' };
     const rating = this.getProductRating(product.id);
@@ -587,22 +619,23 @@ if (chatForm) {
         badge = `<span class="product-badge">-${discount}%</span>`;
     }
 
-    // التحقق من وجود الصورة بشكل صحيح
-    let productImageHTML = '';
-    if (product.image && typeof product.image === 'string' && product.image.startsWith('data:image')) {
+    // عرض الصورة
+    let productImageHTML;
+    
+    if (product.image && typeof product.image === 'string' && product.image.length > 100) {
         productImageHTML = `
             <img src="${product.image}" 
                  alt="${product.name}" 
                  style="width: 100%; height: 100%; object-fit: cover;"
-                 onerror="console.error('❌ فشل تحميل الصورة:', this.src); this.parentElement.innerHTML='<i class=\\'fas ${icons[product.category] || 'fa-box'}\\' style=\\'font-size:60px;color:#ccc\\'></i>';">
+                 onerror="console.error('❌ فشل تحميل الصورة:', '${product.name}'); this.style.display='none'; this.parentElement.innerHTML='<i class=\\'fas ${icons[product.category] || 'fa-box'}\\' style=\\'font-size:60px;color:#ccc\\'></i>';">
         `;
     } else {
-        productImageHTML = `<i class="fas ${icons[product.category] || 'fa-box'}" style="font-size: 60px; color: #ccc;"></i>`;
+        productImageHTML = `<i class="fas ${icons[product.category] || 'fa-box'}" style="font-size: 60px; color: var(--text-muted);"></i>`;
     }
 
     return `
         <div class="product-card" onclick="app.showProductDetails(${product.id})">
-            <div class="product-image" style="position: relative; overflow: hidden;">
+            <div class="product-image">
                 ${productImageHTML}
                 ${badge}
                 <div class="product-rating"><i class="fas fa-star" style="color:#FFD700"></i> ${rating.toFixed(1)}</div>
