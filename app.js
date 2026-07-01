@@ -232,69 +232,64 @@ class MiStoreApp {
     }
 
     // تحويل الصورة إلى Base64
-    getImageBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-                console.log('✅ تم تحويل الصورة إلى Base64');
-                resolve(reader.result);
-            };
-            reader.onerror = (error) => {
-                console.error('❌ خطأ في التحويل:', error);
-                reject(error);
-            };
-            reader.readAsDataURL(file);
+    async uploadImageToImgBB(file) {
+    const API_KEY = 'aa486b5eb4e44ab46aad73a3420b0270'; // ← الصق مفتاحك هنا
+    
+    console.log('📸 جاري رفع الصورة إلى ImgBB...');
+    
+    const formData = new FormData();
+    formData.append('image', file);
+    
+    try {
+        const response = await fetch(`https://api.imgbb.com/1/upload?key=${API_KEY}`, {
+            method: 'POST',
+            body: formData
         });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            const imageUrl = data.data.url;
+            const deleteUrl = data.data.delete_url;
+            
+            console.log('✅ تم رفع الصورة بنجاح!');
+            console.log('🔗 رابط الصورة:', imageUrl);
+            console.log('🗑️ رابط الحذف:', deleteUrl);
+            
+            return imageUrl;
+        } else {
+            throw new Error(data.error?.message || 'فشل في رفع الصورة');
+        }
+        
+    } catch (error) {
+        console.error('❌ خطأ في رفع الصورة:', error);
+        throw new Error('فشل في رفع الصورة إلى ImgBB: ' + error.message);
     }
+}
     // تحويل الصورة إلى base64
     getImageBase64(file) {
-        return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-
-            reader.onload = (e) => {
-                const img = new Image();
-                img.onload = () => {
-                    // إنشاء canvas لضغط الصورة
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-
-                    // تقليل الحجم إذا كان كبيراً جداً
-                    const maxSize = 800;
-                    if (width > height && width > maxSize) {
-                        height = (height * maxSize) / width;
-                        width = maxSize;
-                    } else if (height > maxSize) {
-                        width = (width * maxSize) / height;
-                        height = maxSize;
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    // تحويل الصورة بصيغة JPEG مع ضغط 70%
-                    const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
-
-                    console.log('✅ تم ضغط الصورة:', {
-                        original: file.size,
-                        compressed: compressedDataUrl.length,
-                        reduction: ((1 - compressedDataUrl.length / e.target.result.length) * 100).toFixed(2) + '%'
-                    });
-
-                    resolve(compressedDataUrl);
-                };
-
-                img.onerror = () => reject(new Error('فشل في تحميل الصورة'));
-                img.src = e.target.result;
-            };
-
-            reader.onerror = () => reject(new Error('فشل في قراءة الملف'));
-            reader.readAsDataURL(file);
-        });
-    }
+    return new Promise((resolve, reject) => {
+        const maxSize = 2 * 1024 * 1024; // 2MB
+        if (file.size > maxSize) {
+            reject(new Error(`حجم الصورة كبير جداً: ${(file.size / 1024 / 1024).toFixed(2)} MB (الحد الأقصى 2MB)`));
+            return;
+        }
+        
+        const reader = new FileReader();
+        reader.onload = () => {
+            const result = reader.result;
+            console.log('✅ تم تحويل الصورة بنجاح');
+            console.log('📊 الطول:', result.length);
+            console.log('📝 البداية:', result.substring(0, 50));
+            resolve(result);
+        };
+        reader.onerror = (error) => {
+            console.error('❌ خطأ في FileReader:', error);
+            reject(error);
+        };
+        reader.readAsDataURL(file);
+    });
+}
     // ===== تبويبات الإعدادات =====
     showSettingsTab(tabName) {
         document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
@@ -425,93 +420,117 @@ class MiStoreApp {
 
     // ===== التحقق من المصادقة =====
     checkAuth() {
-        const loginPage = document.getElementById('loginPage');
-        const dashboardPage = document.getElementById('dashboardPage');
-
-        // إخفاء كلتا الصفحتين أولاً
-        loginPage.classList.remove('active');
-        dashboardPage.classList.remove('active');
-
-        if (this.auth.isAuthenticated()) {
-            dashboardPage.classList.add('active');
-            this.initDashboard();
-        } else {
-            loginPage.classList.add('active');
-            this.initLogin();
-        }
+    const loginPage = document.getElementById('loginPage');
+    const dashboardPage = document.getElementById('dashboardPage');
+    
+    // إخفاء كلا الصفحتين أولاً
+    if (loginPage) loginPage.classList.remove('active');
+    if (dashboardPage) dashboardPage.classList.remove('active');
+    
+    if (this.auth.isAuthenticated()) {
+        // إظهار لوحة التحكم فقط
+        if (dashboardPage) dashboardPage.classList.add('active');
+        if (loginPage) loginPage.classList.remove('active');
+        this.initDashboard();
+        console.log('✅ تم عرض لوحة التحكم');
+    } else {
+        // إظهار صفحة الدخول فقط
+        if (loginPage) loginPage.classList.add('active');
+        if (dashboardPage) dashboardPage.classList.remove('active');
+        this.initLogin();
+        console.log('✅ تم عرض صفحة تسجيل الدخول');
     }
+}
 
     // ===== تهيئة تسجيل الدخول =====
     initLogin() {
-        const form = document.getElementById('loginForm');
-        const toggleBtn = document.getElementById('togglePassword');
-        const passwordInput = document.getElementById('password');
-        const loginBtn = document.getElementById('loginBtn');
-        const loginMessage = document.getElementById('loginMessage');
+    const form = document.getElementById('loginForm');
+    const toggleBtn = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
+    const loginBtn = document.getElementById('loginBtn');
+    const loginMessage = document.getElementById('loginMessage');
 
-        const remembered = localStorage.getItem('mi_store_remembered');
-        if (remembered) {
-            try {
-                const data = JSON.parse(remembered);
-                document.getElementById('username').value = data.username || '';
-                document.getElementById('rememberMe').checked = true;
-            } catch { }
+    // استرجاع المستخدم المحفوظ
+    const remembered = localStorage.getItem('mi_store_remembered');
+    if (remembered) {
+        try {
+            const data = JSON.parse(remembered);
+            document.getElementById('username').value = data.username || '';
+            document.getElementById('rememberMe').checked = true;
+        } catch { }
+    }
+
+    // زر إظهار/إخفاء كلمة المرور
+    toggleBtn.addEventListener('click', () => {
+        const icon = toggleBtn.querySelector('i');
+        if (passwordInput.type === 'password') {
+            passwordInput.type = 'text';
+            icon.classList.replace('fa-eye', 'fa-eye-slash');
+        } else {
+            passwordInput.type = 'password';
+            icon.classList.replace('fa-eye-slash', 'fa-eye');
+        }
+    });
+
+    // مستمع إرسال النموذج
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = document.getElementById('username').value.trim();
+        const password = passwordInput.value;
+        const rememberMe = document.getElementById('rememberMe').checked;
+
+        if (!username || !password) {
+            loginMessage.textContent = 'يرجى إدخال جميع البيانات';
+            loginMessage.className = 'login-message show error';
+            return;
         }
 
-        toggleBtn.addEventListener('click', () => {
-            const icon = toggleBtn.querySelector('i');
-            if (passwordInput.type === 'password') {
-                passwordInput.type = 'text';
-                icon.classList.replace('fa-eye', 'fa-eye-slash');
+        loginBtn.classList.add('loading');
+        loginBtn.disabled = true;
+        loginMessage.className = 'login-message';
+
+        await new Promise(r => setTimeout(r, 700));
+
+        const result = this.auth.login(username, password);
+
+        loginBtn.classList.remove('loading');
+        loginBtn.disabled = false;
+
+        if (result.success) {
+            if (rememberMe) {
+                localStorage.setItem('mi_store_remembered', JSON.stringify({ username }));
             } else {
-                passwordInput.type = 'password';
-                icon.classList.replace('fa-eye-slash', 'fa-eye');
-            }
-        });
-
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const username = document.getElementById('username').value.trim();
-            const password = passwordInput.value;
-            const rememberMe = document.getElementById('rememberMe').checked;
-
-            if (!username || !password) {
-                loginMessage.textContent = 'يرجى إدخال جميع البيانات';
-                loginMessage.className = 'login-message show error';
-                return;
+                localStorage.removeItem('mi_store_remembered');
             }
 
-            loginBtn.classList.add('loading');
-            loginBtn.disabled = true;
-            loginMessage.className = 'login-message';
+            loginMessage.textContent = 'تم تسجيل الدخول بنجاح!';
+            loginMessage.className = 'login-message show success';
 
-            await new Promise(r => setTimeout(r, 700));
-
-            const result = this.auth.login(username, password);
-
-            loginBtn.classList.remove('loading');
-            loginBtn.disabled = false;
-
-            if (result.success) {
-                if (rememberMe) localStorage.setItem('mi_store_remembered', JSON.stringify({ username }));
-                else localStorage.removeItem('mi_store_remembered');
-
-                loginMessage.textContent = 'تم تسجيل الدخول بنجاح!';
-                loginMessage.className = 'login-message show success';
-
-                // إخفاء صفحة تسجيل الدخول وإظهار لوحة التحكم
-                setTimeout(() => {
-                    document.getElementById('loginPage').classList.remove('active');
-                    document.getElementById('dashboardPage').classList.add('active');
-                    this.initDashboard();
-                }, 800);
-            } else {
-                loginMessage.textContent = result.message;
-                loginMessage.className = 'login-message show error';
-                passwordInput.value = '';
-            }
-        });
-    }
+            // ✅ إخفاء صفحة الدخول وإظهار لوحة التحكم
+            setTimeout(() => {
+                const loginPage = document.getElementById('loginPage');
+                const dashboardPage = document.getElementById('dashboardPage');
+                
+                if (loginPage) {
+                    loginPage.classList.remove('active');
+                    loginPage.style.display = 'none';
+                }
+                
+                if (dashboardPage) {
+                    dashboardPage.classList.add('active');
+                    dashboardPage.style.display = 'flex';
+                }
+                
+                this.initDashboard();
+                console.log('✅ تم التحويل إلى لوحة التحكم');
+            }, 800);
+        } else {
+            loginMessage.textContent = result.message;
+            loginMessage.className = 'login-message show error';
+            passwordInput.value = '';
+        }
+    });
+}
 
     // ===== تهيئة لوحة التحكم =====
     initDashboard() {
@@ -790,26 +809,30 @@ class MiStoreApp {
         const minQuantity = parseInt(document.getElementById('pMinQuantity').value) || 5;
         const description = document.getElementById('pDescription').value.trim();
         
-        console.log('🔍 فحص الصورة قبل الحفظ:');
-        console.log('   - this.selectedProductImage:', this.selectedProductImage ? 'موجود (' + this.selectedProductImage.length + ' char)' : 'غير موجود');
+        console.log('🔍 بدء حفظ المنتج:', name);
         
-        const imageInput = document.getElementById('pImage');
-        console.log('   - imageInput:', imageInput);
-        console.log('   - imageInput.files:', imageInput?.files?.length);
-        
-        // استخدام الصورة من المتغير (الأولوية)
+        // معالجة الصورة
         let imageData = this.selectedProductImage;
+        const imageInput = document.getElementById('pImage');
         
-        // إذا لم تكن في المتغير، حاول من input مباشرة
         if (!imageData && imageInput && imageInput.files && imageInput.files[0]) {
-            console.log(' جاري قراءة الصورة من input مباشرة...');
-            imageData = await this.getImageBase64(imageInput.files[0]);
+            console.log('📸 جاري قراءة الصورة...');
+            try {
+                imageData = await this.getImageBase64(imageInput.files[0]);
+                console.log('✅ تم قراءة الصورة، الحجم:', (imageData.length / 1024).toFixed(2), 'KB');
+            } catch (error) {
+                console.error('❌ خطأ في قراءة الصورة:', error);
+                this.toast.error('خطأ', 'فشل في قراءة الصورة: ' + error.message);
+                return;
+            }
         }
         
+        // التحقق من صحة الصورة
         if (imageData) {
-            console.log('✅ سيتم حفظ الصورة، الحجم:', (imageData.length / 1024).toFixed(2), 'KB');
-        } else {
-            console.log('⚠️ لا توجد صورة للحفظ');
+            if (!imageData.startsWith('data:image')) {
+                console.warn('⚠️ الصورة لا تبدأ بـ data:image');
+            }
+            console.log('💾 الصورة جاهزة للحفظ');
         }
 
         if (!code || !name || isNaN(purchasePrice) || isNaN(salePrice) || isNaN(quantity)) {
@@ -831,21 +854,22 @@ class MiStoreApp {
                 };
                 this.storage.set('products', products);
                 this.toast.success('تم', 'تم تحديث المنتج');
-                console.log('✅ تم تحديث المنتج مع الصورة');
+                console.log('✅ تم تحديث المنتج في localStorage');
             }
         } else {
             const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
-            products.push({ 
-                id: newId, code, name, category, purchasePrice, salePrice, quantity, minQuantity, description, 
+            const newProduct = { 
+                id: newId, 
+                code, name, category, purchasePrice, salePrice, quantity, minQuantity, description, 
                 image: imageData,
                 createdAt: new Date().toISOString() 
-            });
+            };
+            products.push(newProduct);
             this.storage.set('products', products);
             this.toast.success('تم', 'تم إضافة المنتج');
-            console.log('✅ تم إضافة المنتج مع الصورة');
+            console.log('✅ تم إضافة المنتج في localStorage');
         }
         
-        // إعادة تعيين بعد الحفظ
         this.selectedProductImage = null;
         
         this.modal.close();
@@ -853,6 +877,13 @@ class MiStoreApp {
         this.renderInventoryTable();
         this.updateStats();
         this.renderLowStock();
+        
+        // فحص المنتجات
+        const savedProducts = this.storage.get('products', []);
+        console.log('📦 إجمالي المنتجات:', savedProducts.length);
+        savedProducts.forEach((p, idx) => {
+            console.log(`المنتج ${idx + 1}: ${p.name} - لديه صورة: ${!!p.image}`);
+        });
         
     } catch (error) {
         console.error('❌ خطأ في saveProduct:', error);
