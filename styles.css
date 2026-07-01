@@ -2065,3 +2065,31 @@ body {
 .settings-tab-content.active {
     display: block;
 }
+/* ========== إخفاء الصفحات ========== */
+.page {
+    display: none;
+}
+
+.page.active {
+    display: block;
+}
+
+/* تأكد من إخفاء صفحة الدخول عند الظهور */
+#loginPage {
+    display: none;
+}
+
+#loginPage.active {
+    display: flex;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+}
+
+#dashboardPage {
+    display: none;
+}
+
+#dashboardPage.active {
+    display: flex;
+}
