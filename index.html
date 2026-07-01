@@ -838,5 +838,30 @@
     <div class="toast-container" id="toastContainer"></div>
 
     <script src="app.js"></script>
+    <!-- Firebase SDK (Compat Version) -->
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+
+<script>
+  // إعدادات Firebase - من مشروعك
+  const firebaseConfig = {
+    apiKey: "AIzaSyCBGRZ3jyQz2wAIsAJ7xnYwF9vO748USEE",
+    authDomain: "mi-store-f7924.firebaseapp.com",
+    projectId: "mi-store-f7924",
+    storageBucket: "mi-store-f7924.appspot.com",
+    messagingSenderId: "204760415600",
+    appId: "1:204760415600:web:41068f63aed8d905db23b5"
+  };
+
+  // تهيئة Firebase
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+  
+  console.log('✅ تم الاتصال بـ Firebase بنجاح');
+  console.log('Project ID:', firebaseConfig.projectId);
+</script>
+
+<!-- ملف JavaScript الخاص بك -->
+<script src="app.js"></script>
 </body>
 </html>
