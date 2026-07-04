@@ -2059,3 +2059,233 @@ body {
     transform: scale(1.05);
     transition: var(--transition);
 }
+/* ========== أزرار التواصل الجديدة ========== */
+.contact-buttons-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 20px;
+    margin: 30px 0;
+}
+
+.contact-action-btn {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 20px;
+    background: white;
+    border: 2px solid var(--border-color);
+    border-radius: var(--border-radius-lg);
+    text-decoration: none;
+    color: inherit;
+    transition: var(--transition);
+    cursor: pointer;
+    font-family: inherit;
+}
+
+.contact-action-btn:hover {
+    transform: translateX(-8px);
+    box-shadow: var(--shadow-lg);
+}
+
+.contact-btn-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 24px;
+    flex-shrink: 0;
+}
+
+.contact-btn-text {
+    flex: 1;
+    text-align: right;
+}
+
+.contact-btn-text h4 {
+    font-size: 18px;
+    margin-bottom: 4px;
+    color: var(--text-dark);
+}
+
+.contact-btn-text p {
+    font-size: 13px;
+    color: var(--text-muted);
+    margin: 0;
+}
+
+.contact-btn-arrow {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: var(--bg-light);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    transition: var(--transition);
+}
+
+.contact-action-btn:hover .contact-btn-arrow {
+    background: var(--primary);
+    color: white;
+}
+
+.phone-btn .contact-btn-icon {
+    background: linear-gradient(135deg, #3498db, #2980b9);
+}
+
+.whatsapp-btn .contact-btn-icon {
+    background: linear-gradient(135deg, #25D366, #128C7E);
+}
+
+.facebook-btn .contact-btn-icon {
+    background: linear-gradient(135deg, #1877F2, #0d5bca);
+}
+
+/* تحسين العرض في الهاتف */
+@media (max-width: 768px) {
+    .contact-buttons-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .contact-footer-info {
+        margin: 20px 10px;
+        padding: 20px;
+    }
+    
+    .contact-footer-info > div {
+        flex-direction: column;
+        gap: 10px;
+    }
+}
+/* ========== إصلاح مشكلة العرض في الهاتف ========== */
+@media (max-width: 768px) {
+    /* إصلاح النافبار */
+    .main-nav {
+        position: relative !important;
+        width: 100% !important;
+        transform: none !important;
+    }
+    
+    /* إصلاح الأقسام */
+    .section {
+        padding: 20px 10px !important;
+        margin-bottom: 0 !important;
+    }
+    
+    /* إصلاح الفوتر */
+    .footer {
+        position: relative !important;
+        margin-top: 30px !important;
+    }
+    
+    /* إصلاح الأزرار العائمة */
+    .chat-toggle-btn,
+    .whatsapp-float {
+        bottom: 20px !important;
+        right: 20px !important;
+        width: 55px !important;
+        height: 55px !important;
+    }
+    
+    /* إصلاح شبكة المنتجات */
+    .products-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+        gap: 10px !important;
+    }
+    
+    .product-card {
+        margin-bottom: 0 !important;
+    }
+    
+    /* إصلاح الهيدر */
+    .hero {
+        padding: 40px 15px !important;
+    }
+    
+    .hero h1 {
+        font-size: 24px !important;
+    }
+    
+    /* إصلاح قسم تواصل معنا */
+    .contact-buttons-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    /* إصلاح المستطيل الأسود */
+    .fixed-bottom-bar,
+    .bottom-nav {
+        position: relative !important;
+        bottom: auto !important;
+        left: auto !important;
+        right: auto !important;
+        width: 100% !important;
+    }
+    
+    /* إصلاح overflow */
+    body {
+        overflow-x: hidden !important;
+    }
+    
+    html {
+        overflow-x: hidden !important;
+    }
+}
+
+/* ========== تحسينات عامة للهاتف ========== */
+@media (max-width: 480px) {
+    .products-grid {
+        grid-template-columns: 1fr !important;
+    }
+    
+    .section-title {
+        font-size: 22px !important;
+    }
+    
+    .product-card .product-info {
+        padding: 10px !important;
+    }
+    
+    .product-name {
+        font-size: 14px !important;
+    }
+}
+/* ========== أزرار التبويب ========== */
+.whatsnew-tabs,
+.offers-tabs {
+    display: flex;
+    gap: 15px;
+    margin-bottom: 30px;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.whatsnew-tabs .btn,
+.offers-tabs .btn {
+    padding: 12px 25px;
+    font-size: 15px;
+    border-radius: 25px;
+    transition: all 0.3s;
+}
+
+.whatsnew-tabs .btn.active,
+.offers-tabs .btn.active {
+    transform: scale(1.05);
+    box-shadow: 0 5px 15px rgba(255, 103, 0, 0.3);
+}
+
+@media (max-width: 768px) {
+    .whatsnew-tabs,
+    .offers-tabs {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    
+    .whatsnew-tabs .btn,
+    .offers-tabs .btn {
+        width: 100%;
+    }
+}
