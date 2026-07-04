@@ -279,6 +279,7 @@ class MiStoreApp {
             console.log('✅ تم عرض صفحة تسجيل الدخول');
         }
     }
+
     
     // ===== تهيئة تسجيل الدخول =====
     initLogin() {
@@ -1227,77 +1228,91 @@ if (fileToUpload) {
     }
     
     async saveSale() {
-        if (this.cart.length === 0) { this.toast.warning('تنبيه', 'السلة فارغة!'); return; }
-        
-        const customerId = parseInt(document.getElementById('saleCustomer').value) || null;
-        const customers = await this.storage.get('customers', []);
-        const customer = customers.find(c => c.id === customerId);
-        
-        const subtotal = this.cart.reduce((sum, item) => sum + item.total, 0);
-        const discount = parseFloat(document.getElementById('cartDiscount').value) || 0;
-        const settings = await this.storage.get('settings', {});
-        const taxRate = settings.taxRate || 0;
-        const tax = (subtotal - discount) * (taxRate / 100);
-        const total = subtotal - discount + tax;
-        const paid = parseFloat(document.getElementById('salePaid').value) || 0;
-        const paymentMethod = document.getElementById('salePayment').value;
-        const notes = document.getElementById('saleNotes').value.trim();
-        
-        let status = 'paid';
-        if (paymentMethod === 'credit') status = 'pending';
-        else if (paid < total) status = 'pending';
-        
-        const sales = await this.storage.get('sales', []);
-        const sale = {
-            id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
-            invoiceNumber: this.generateInvoiceNumber('INV'),
-            date: new Date().toISOString(),
-            customerId, customerName: customer?.name || 'عميل نقدي',
-            customerPhone: customer?.phone || '',
-            items: this.cart.map(item => ({ ...item })),
-            subtotal, discount, tax, total, paid, remaining: Math.max(0, total - paid),
-            paymentMethod, notes, status,
-            user: this.auth.getCurrentUser()?.fullName || 'admin'
-        };
-        sales.push(sale);
-        await this.storage.set('sales', sales);
-        
-        const products = await this.storage.get('products', []);
-        for (const cartItem of this.cart) {
-            const product = products.find(p => p.id === cartItem.productId);
-            if (product) {
-                product.quantity -= cartItem.quantity;
-                const movements = await this.storage.get('stockMovements', []);
-                movements.push({
-                    id: movements.length + 1,
-                    productId: product.id, productName: product.name,
-                    type: 'sale', quantity: cartItem.quantity, price: cartItem.price,
-                    reference: sale.invoiceNumber, date: sale.date, user: sale.user
-                });
-                await this.storage.set('stockMovements', movements);
-            }
-        }
-        await this.storage.set('products', products);
-        
-        if (customerId && sale.remaining > 0) {
-            const customer = customers.find(c => c.id === customerId);
-            if (customer) {
-                customer.balance = (customer.balance || 0) + sale.remaining;
-                await this.storage.set('customers', customers);
-            }
-        }
-        
-        this.modal.close();
-        this.toast.success('تم', `تم حفظ الفاتورة ${sale.invoiceNumber}`);
-        this.printSale(sale.id);
-        this.cart = [];
-        await this.renderSalesTable();
-        await this.renderInventoryTable();
-        await this.renderProductsTable();
-        await this.updateStats();
-        await this.renderRecentSales();
-        await this.renderLowStock();
+    if (this.cart.length === 0) { 
+        this.toast.warning('تنبيه', 'السلة فارغة!'); 
+        return; 
     }
+    
+    const customerId = parseInt(document.getElementById('saleCustomer').value) || null;
+    const customers = await this.storage.get('customers', []);
+    const customer = customers.find(c => c.id === customerId);
+    
+    const subtotal = this.cart.reduce((sum, item) => sum + item.total, 0);
+    const discount = parseFloat(document.getElementById('cartDiscount').value) || 0;
+    const settings = await this.storage.get('settings', {});
+    const taxRate = settings.taxRate || 0;
+    const tax = (subtotal - discount) * (taxRate / 100);
+    const total = subtotal - discount + tax;
+    const paid = parseFloat(document.getElementById('salePaid').value) || 0;
+    const paymentMethod = document.getElementById('salePayment').value;
+    const notes = document.getElementById('saleNotes').value.trim();
+    
+    let status = 'paid';
+    if (paymentMethod === 'credit') status = 'pending';
+    else if (paid < total) status = 'pending';
+    
+    const sales = await this.storage.get('sales', []);
+    const sale = {
+        id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
+        invoiceNumber: this.generateInvoiceNumber('INV'),
+        date: new Date().toISOString(),
+        customerId, 
+        customerName: customer?.name || 'عميل نقدي',
+        customerPhone: customer?.phone || '',
+        items: this.cart.map(item => ({ ...item })),
+        subtotal, discount, tax, total, paid, 
+        remaining: Math.max(0, total - paid),
+        paymentMethod, notes, status,
+        user: this.auth.getCurrentUser()?.fullName || 'admin'
+    };
+    sales.push(sale);
+    await this.storage.set('sales', sales);
+    
+    // ===== خصم الكميات من المخزون =====
+    const products = await this.storage.get('products', []);
+    for (const cartItem of this.cart) {
+        const product = products.find(p => p.id === cartItem.productId);
+        if (product) {
+            product.quantity -= cartItem.quantity;
+            
+            // تسجيل حركة المخزون
+            const movements = await this.storage.get('stockMovements', []);
+            movements.push({
+                id: movements.length + 1,
+                productId: product.id, 
+                productName: product.name,
+                type: 'sale', 
+                quantity: cartItem.quantity, 
+                price: cartItem.price,
+                reference: sale.invoiceNumber, 
+                date: sale.date, 
+                user: sale.user
+            });
+            await this.storage.set('stockMovements', movements);
+        }
+    }
+    await this.storage.set('products', products);
+    
+    // تحديث رصيد العميل
+    if (customerId && sale.remaining > 0) {
+        const customer = customers.find(c => c.id === customerId);
+        if (customer) {
+            customer.balance = (customer.balance || 0) + sale.remaining;
+            await this.storage.set('customers', customers);
+        }
+    }
+    
+    this.modal.close();
+    this.toast.success('تم', `تم حفظ الفاتورة ${sale.invoiceNumber} - تم خصم الكميات من المخزون`);
+    this.printSale(sale.id);
+    this.cart = [];
+    await this.renderSalesTable();
+    await this.renderInventoryTable();
+    await this.renderProductsTable();
+    await this.updateStats();
+    await this.renderRecentSales();
+    await this.renderLowStock();
+}
     
     async viewSale(id) {
         const sales = await this.storage.get('sales', []);
@@ -2266,7 +2281,271 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         this.toast.success('تم', 'تم إضافة المنتج للعروض');
         await this.renderOffersTable();
     }
+    // ===== تبويب العروض =====
+showOffersTab(tab) {
+    const discountsContent = document.getElementById('offersDiscountsContent');
+    const contestsContent = document.getElementById('offersContestsContent');
+    const buttons = document.querySelectorAll('.offers-tabs .btn');
     
+    if (tab === 'discounts') {
+        discountsContent.style.display = 'block';
+        contestsContent.style.display = 'none';
+        buttons[0].classList.add('active');
+        buttons[1].classList.remove('active');
+        this.renderOffersTable();
+    } else {
+        discountsContent.style.display = 'none';
+        contestsContent.style.display = 'block';
+        buttons[0].classList.remove('active');
+        buttons[1].classList.add('active');
+        this.renderContestsTable();
+    }
+}
+
+// ===== المسابقات =====
+async showAddContestModal() {
+    const body = `
+        <form id="contestForm">
+            <div class="form-group">
+                <label>اسم البكج/المسابقة *</label>
+                <input type="text" class="form-input" id="contestName" required>
+            </div>
+            <div class="form-group">
+                <label>صورة البكج</label>
+                <input type="file" id="contestImage" class="form-input" accept="image/*">
+                <div id="contestImagePreview" style="margin-top: 10px; display: none;">
+                    <img id="contestPreviewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px;">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>وصف البكج</label>
+                <textarea class="form-textarea" id="contestDescription"></textarea>
+            </div>
+            <div class="form-group">
+                <label>تاريخ الانتهاء</label>
+                <input type="date" class="form-input" id="contestExpiry">
+            </div>
+        </form>
+    `;
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+        <button class="btn btn-primary" onclick="app.saveContest()">
+            <i class="fas fa-save"></i> حفظ
+        </button>
+    `;
+    this.modal.open('إضافة مسابقة/بكج جديد', body, footer);
+}
+
+async saveContest() {
+    const name = document.getElementById('contestName').value.trim();
+    const description = document.getElementById('contestDescription').value.trim();
+    const expiry = document.getElementById('contestExpiry').value;
+    
+    if (!name) {
+        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+        return;
+    }
+    
+    let imageUrl = null;
+    const imageInput = document.getElementById('contestImage');
+    if (imageInput && imageInput.files && imageInput.files[0]) {
+        try {
+            imageUrl = await this.uploadImageToImgBB(imageInput.files[0]);
+        } catch (error) {
+            this.toast.error('خطأ', 'فشل رفع الصورة');
+            return;
+        }
+    }
+    
+    const contests = await this.storage.get('contests', []);
+    const newContest = {
+        id: contests.length > 0 ? Math.max(...contests.map(c => c.id)) + 1 : 1,
+        name,
+        description,
+        image: imageUrl,
+        expiryDate: expiry,
+        bookings: [],
+        createdAt: new Date().toISOString()
+    };
+    
+    contests.push(newContest);
+    await this.storage.set('contests', contests);
+    
+    this.modal.close();
+    this.toast.success('تم', 'تم إضافة المسابقة بنجاح');
+    this.renderContestsTable();
+}
+
+async renderContestsTable() {
+    const contests = await this.storage.get('contests', []);
+    const tbody = document.getElementById('contestsTableBody');
+    if (!tbody) return;
+    
+    if (contests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-gift"></i><p>لا توجد مسابقات</p></div></td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = contests.map(contest => `
+        <tr>
+            <td><strong>${contest.name}</strong></td>
+            <td>${contest.image ? `<img src="${contest.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">` : '-'}</td>
+            <td>${contest.bookings ? contest.bookings.length : 0}</td>
+            <td><span class="status-badge ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'danger' : 'success'}">
+                ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'منتهي' : 'نشط'}
+            </span></td>
+            <td>
+                <div class="action-buttons">
+                    <button class="action-btn view" onclick="app.viewContestBookings(${contest.id})" title="عرض الحجوزات">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="action-btn edit" onclick="app.editContest(${contest.id})" title="تعديل">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn delete" onclick="app.deleteContest(${contest.id})" title="حذف">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async viewContestBookings(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+    
+    const bookings = contest.bookings || [];
+    
+    let body = `
+        <div style="margin-bottom: 20px;">
+            <h3>${contest.name} - الحجوزات (${bookings.length})</h3>
+        </div>
+    `;
+    
+    if (bookings.length > 0) {
+        body += `
+            <button class="btn btn-primary mb-3" onclick="app.selectRandomWinner(${contestId})">
+                <i class="fas fa-random"></i> اختيار فائز عشوائي
+            </button>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الاسم</th>
+                            <th>رقم الهاتف</th>
+                            <th>تاريخ الحجز</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bookings.map((booking, idx) => `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td>${booking.name}</td>
+                                <td>${booking.phone}</td>
+                                <td>${this.formatDateTime(booking.date)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        body += '<div class="empty-state"><i class="fas fa-users"></i><p>لا توجد حجوزات بعد</p></div>';
+    }
+    
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إغلاق</button>
+    `;
+    
+    this.modal.open('حجوزات المسابقة', body, footer);
+}
+
+async selectRandomWinner(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest || !contest.bookings || contest.bookings.length === 0) {
+        this.toast.warning('تنبيه', 'لا توجد حجوزات لاختيار فائز');
+        return;
+    }
+    
+    const randomIndex = Math.floor(Math.random() * contest.bookings.length);
+    const winner = contest.bookings[randomIndex];
+    
+    this.modal.confirm('الفائز المختار', 
+        `🎉 الفائز هو: ${winner.name}\n📱 رقم الهاتف: ${winner.phone}`,
+        () => {}
+    );
+}
+
+async editContest(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+    
+    const body = `
+        <form id="editContestForm">
+            <div class="form-group">
+                <label>اسم البكج/المسابقة *</label>
+                <input type="text" class="form-input" id="editContestName" value="${contest.name}" required>
+            </div>
+            <div class="form-group">
+                <label>وصف البكج</label>
+                <textarea class="form-textarea" id="editContestDescription">${contest.description || ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>تاريخ الانتهاء</label>
+                <input type="date" class="form-input" id="editContestExpiry" value="${contest.expiryDate || ''}">
+            </div>
+        </form>
+    `;
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+        <button class="btn btn-primary" onclick="app.updateContest(${contestId})">
+            <i class="fas fa-save"></i> تحديث
+        </button>
+    `;
+    this.modal.open('تعديل المسابقة', body, footer);
+}
+
+async updateContest(contestId) {
+    const name = document.getElementById('editContestName').value.trim();
+    const description = document.getElementById('editContestDescription').value.trim();
+    const expiry = document.getElementById('editContestExpiry').value;
+    
+    if (!name) {
+        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+        return;
+    }
+    
+    const contests = await this.storage.get('contests', []);
+    const index = contests.findIndex(c => c.id === contestId);
+    if (index !== -1) {
+        contests[index] = {
+            ...contests[index],
+            name,
+            description,
+            expiryDate: expiry,
+            updatedAt: new Date().toISOString()
+        };
+        await this.storage.set('contests', contests);
+        this.modal.close();
+        this.toast.success('تم', 'تم تحديث المسابقة');
+        this.renderContestsTable();
+    }
+}
+
+async deleteContest(contestId) {
+    this.modal.confirm('حذف المسابقة', 'هل أنت متأكد من حذف هذه المسابقة؟', async () => {
+        let contests = await this.storage.get('contests', []);
+        contests = contests.filter(c => c.id !== contestId);
+        await this.storage.set('contests', contests);
+        this.toast.success('تم', 'تم حذف المسابقة');
+        this.renderContestsTable();
+    });
+}
     async editOfferProduct(productId) {
         const offers = await this.storage.get('offers', { products: [] });
         const offer = offers.products.find(op => op.productId === productId);
@@ -2746,6 +3025,264 @@ table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padd
         console.log(`منتجات بصور: ${withImage}`);
         console.log(`منتجات بدون صور: ${withoutImage}`);
     }
+// ===== تبويب العروض =====
+showOffersTab(tab) {
+    const discountsContent = document.getElementById('offersDiscountsContent');
+    const contestsContent = document.getElementById('offersContestsContent');
+    const buttons = document.querySelectorAll('.offers-tabs .btn');
+    
+    if (tab === 'discounts') {
+        discountsContent.style.display = 'block';
+        contestsContent.style.display = 'none';
+        buttons[0].classList.add('active');
+        buttons[1].classList.remove('active');
+        this.renderOffersTable();
+    } else {
+        discountsContent.style.display = 'none';
+        contestsContent.style.display = 'block';
+        buttons[0].classList.remove('active');
+        buttons[1].classList.add('active');
+        this.renderContestsTable();
+    }
+}
+
+// ===== المسابقات =====
+async showAddContestModal() {
+    const body = `
+        <form id="contestForm">
+            <div class="form-group">
+                <label>اسم البكج/المسابقة *</label>
+                <input type="text" class="form-input" id="contestName" required>
+            </div>
+            <div class="form-group">
+                <label>صورة البكج</label>
+                <input type="file" id="contestImage" class="form-input" accept="image/*">
+                <div id="contestImagePreview" style="margin-top: 10px; display: none;">
+                    <img id="contestPreviewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px;">
+                </div>
+            </div>
+            <div class="form-group">
+                <label>وصف البكج</label>
+                <textarea class="form-textarea" id="contestDescription"></textarea>
+            </div>
+            <div class="form-group">
+                <label>تاريخ الانتهاء</label>
+                <input type="date" class="form-input" id="contestExpiry">
+            </div>
+        </form>
+    `;
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+        <button class="btn btn-primary" onclick="app.saveContest()">
+            <i class="fas fa-save"></i> حفظ
+        </button>
+    `;
+    this.modal.open('إضافة مسابقة/بكج جديد', body, footer);
+}
+
+async saveContest() {
+    const name = document.getElementById('contestName').value.trim();
+    const description = document.getElementById('contestDescription').value.trim();
+    const expiry = document.getElementById('contestExpiry').value;
+    
+    if (!name) {
+        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+        return;
+    }
+    
+    let imageUrl = null;
+    const imageInput = document.getElementById('contestImage');
+    if (imageInput && imageInput.files && imageInput.files[0]) {
+        try {
+            imageUrl = await this.uploadImageToImgBB(imageInput.files[0]);
+        } catch (error) {
+            this.toast.error('خطأ', 'فشل رفع الصورة');
+            return;
+        }
+    }
+    
+    const contests = await this.storage.get('contests', []);
+    const newContest = {
+        id: contests.length > 0 ? Math.max(...contests.map(c => c.id)) + 1 : 1,
+        name,
+        description,
+        image: imageUrl,
+        expiryDate: expiry,
+        bookings: [],
+        createdAt: new Date().toISOString()
+    };
+    
+    contests.push(newContest);
+    await this.storage.set('contests', contests);
+    
+    this.modal.close();
+    this.toast.success('تم', 'تم إضافة المسابقة بنجاح');
+    this.renderContestsTable();
+}
+
+async renderContestsTable() {
+    const contests = await this.storage.get('contests', []);
+    const tbody = document.getElementById('contestsTableBody');
+    if (!tbody) return;
+    
+    if (contests.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-gift"></i><p>لا توجد مسابقات</p></div></td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = contests.map(contest => `
+        <tr>
+            <td><strong>${contest.name}</strong></td>
+            <td>${contest.image ? `<img src="${contest.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">` : '-'}</td>
+            <td>${contest.bookings ? contest.bookings.length : 0}</td>
+            <td><span class="status-badge ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'danger' : 'success'}">
+                ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'منتهي' : 'نشط'}
+            </span></td>
+            <td>
+                <div class="action-buttons">
+                    <button class="action-btn view" onclick="app.viewContestBookings(${contest.id})" title="عرض الحجوزات">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button class="action-btn edit" onclick="app.editContest(${contest.id})" title="تعديل">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="action-btn delete" onclick="app.deleteContest(${contest.id})" title="حذف">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+}
+
+async viewContestBookings(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+    
+    const bookings = contest.bookings || [];
+    
+    let body = `<div style="margin-bottom: 20px;"><h3>${contest.name} - الحجوزات (${bookings.length})</h3></div>`;
+    
+    if (bookings.length > 0) {
+        body += `
+            <button class="btn btn-primary mb-3" onclick="app.selectRandomWinner(${contestId})">
+                <i class="fas fa-random"></i> اختيار فائز عشوائي
+            </button>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>الاسم</th>
+                            <th>رقم الهاتف</th>
+                            <th>تاريخ الحجز</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${bookings.map((booking, idx) => `
+                            <tr>
+                                <td>${idx + 1}</td>
+                                <td>${booking.name}</td>
+                                <td>${booking.phone}</td>
+                                <td>${this.formatDateTime(booking.date)}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    } else {
+        body += '<div class="empty-state"><i class="fas fa-users"></i><p>لا توجد حجوزات بعد</p></div>';
+    }
+    
+    const footer = `<button class="btn btn-outline" onclick="app.modal.close()">إغلاق</button>`;
+    this.modal.open('حجوزات المسابقة', body, footer);
+}
+
+async selectRandomWinner(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest || !contest.bookings || contest.bookings.length === 0) {
+        this.toast.warning('تنبيه', 'لا توجد حجوزات لاختيار فائز');
+        return;
+    }
+    
+    const randomIndex = Math.floor(Math.random() * contest.bookings.length);
+    const winner = contest.bookings[randomIndex];
+    
+    this.modal.confirm('🎉 الفائز المختار', 
+        `الفائز هو: ${winner.name}\n📱 رقم الهاتف: ${winner.phone}`,
+        () => {}
+    );
+}
+
+async editContest(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+    
+    const body = `
+        <form id="editContestForm">
+            <div class="form-group">
+                <label>اسم البكج/المسابقة *</label>
+                <input type="text" class="form-input" id="editContestName" value="${contest.name}" required>
+            </div>
+            <div class="form-group">
+                <label>وصف البكج</label>
+                <textarea class="form-textarea" id="editContestDescription">${contest.description || ''}</textarea>
+            </div>
+            <div class="form-group">
+                <label>تاريخ الانتهاء</label>
+                <input type="date" class="form-input" id="editContestExpiry" value="${contest.expiryDate || ''}">
+            </div>
+        </form>
+    `;
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+        <button class="btn btn-primary" onclick="app.updateContest(${contestId})">
+            <i class="fas fa-save"></i> تحديث
+        </button>
+    `;
+    this.modal.open('تعديل المسابقة', body, footer);
+}
+
+async updateContest(contestId) {
+    const name = document.getElementById('editContestName').value.trim();
+    const description = document.getElementById('editContestDescription').value.trim();
+    const expiry = document.getElementById('editContestExpiry').value;
+    
+    if (!name) {
+        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+        return;
+    }
+    
+    const contests = await this.storage.get('contests', []);
+    const index = contests.findIndex(c => c.id === contestId);
+    if (index !== -1) {
+        contests[index] = {
+            ...contests[index],
+            name,
+            description,
+            expiryDate: expiry,
+            updatedAt: new Date().toISOString()
+        };
+        await this.storage.set('contests', contests);
+        this.modal.close();
+        this.toast.success('تم', 'تم تحديث المسابقة');
+        this.renderContestsTable();
+    }
+}
+
+async deleteContest(contestId) {
+    this.modal.confirm('حذف المسابقة', 'هل أنت متأكد من حذف هذه المسابقة؟', async () => {
+        let contests = await this.storage.get('contests', []);
+        contests = contests.filter(c => c.id !== contestId);
+        await this.storage.set('contests', contests);
+        this.toast.success('تم', 'تم حذف المسابقة');
+        this.renderContestsTable();
+    });
+}
 }
 
 // ========== بدء التشغيل ==========
