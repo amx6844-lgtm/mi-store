@@ -134,7 +134,7 @@
                         <a href="#"><i class="fas fa-cash-register"></i><span>المبيعات</span></a>
                     </li>
                     <li class="nav-item" data-page="purchases">
-                        <a href="#"><i class="fas fa-truck-loading"></i><span>المشتريات</span></a>
+                        
                     </li>
                     <li class="nav-item" data-page="suppliers">
                         <a href="#"><i class="fas fa-industry"></i><span>الموردين</span></a>
@@ -146,7 +146,7 @@
                         <a href="#"><i class="fas fa-ticket-alt"></i><span>أكواد الخصم</span></a>
                     </li>
                     <li class="nav-item" data-page="offers">
-                        <a href="#"><i class="fas fa-fire"></i><span>عروض اليوم</span></a>
+                        <a href="#" class="nav-item" data-page="offers">العروض والمسابقات</a>
                     </li>
                     <li class="nav-item" data-page="chat">
                         <a href="#"><i class="fas fa-comments"></i><span>المحادثات</span></a>
@@ -513,62 +513,101 @@
                 </div>
 
                 <!-- صفحة عروض اليوم -->
-                <div id="offersContent" class="content-section">
-                    <div class="page-header">
-                        <h2>عروض اليوم</h2>
-                        <button class="btn btn-primary" onclick="app.showAddOfferModal()">
-                            <i class="fas fa-plus"></i>
-                            إضافة عرض
-                        </button>
-                    </div>
-                    <div class="card">
-                        <div class="card-body">
-                            <div class="offer-settings">
-                                <div class="form-group">
-                                    <label>عنوان العرض الرئيسي</label>
-                                    <input type="text" id="offerTitle" class="form-input" placeholder="مثال: عروض الصيف">
-                                </div>
-                                <div class="form-row">
-                                    <div class="form-group">
-                                        <label>وقت البدء</label>
-                                        <input type="datetime-local" id="offerStart" class="form-input">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>وقت الانتهاء</label>
-                                        <input type="datetime-local" idofferEnd" class="form-input">
-                                    </div>
-                                    <div class="form-group">
-    <label>صورة المنتج</label>
-    <input type="file" id="pImage" class="form-input" accept="image/*" onchange="app.previewImage(this)">
-    <div id="imagePreview" style="margin-top: 10px; display: none;">
-        <img id="previewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px; border: 2px solid var(--border-color);">
+                <section id="offersContent" class="content-section">
+    <div class="section-header">
+        <h2><i class="fas fa-fire"></i> العروض والمسابقات</h2>
     </div>
-</div>
-                                </div>
-                                <button class="btn btn-success" onclick="app.saveOfferSettings()">
-                                    <i class="fas fa-save"></i>
-                                    حفظ الإعدادات
-                                </button>
-                            </div>
-                            
-                            <h3 style="margin: 30px 0 15px; font-size: 18px;">المنتجات في العروض</h3>
-                            <div class="table-container">
-                                <table class="data-table" id="offersTable">
-                                    <thead>
-                                        <tr>
-                                            <th>المنتج</th>
-                                            <th>السعر الأصلي</th>
-                                            <th>نسبة الخصم</th>
-                                            <th>السعر بعد الخصم</th>
-                                            <th>الإجراءات</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody id="offersTableBody"></tbody>
-                                </table>
-                            </div>
+    
+    <div class="offers-tabs" style="display: flex; gap: 15px; margin-bottom: 30px;">
+        <button class="btn btn-primary active" onclick="app.showOffersTab('discounts')">
+            <i class="fas fa-percentage"></i> المنتجات المخفضة
+        </button>
+        <button class="btn btn-outline" onclick="app.showOffersTab('contests')">
+            <i class="fas fa-gift"></i> المسابقات
+        </button>
+    </div>
+    
+    <div id="offersDiscountsContent">
+        <div class="card">
+            <div class="card-header">
+                <h3>إعدادات العروض</h3>
+            </div>
+            <div class="card-body">
+                <form id="offerSettingsForm" onsubmit="event.preventDefault(); app.saveOfferSettings();">
+                    <div class="form-group">
+                        <label>عنوان العرض</label>
+                        <input type="text" class="form-input" id="offerTitle" placeholder="مثال: عروض الصيف">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>وقت البدء</label>
+                            <input type="datetime-local" class="form-input" id="offerStart">
+                        </div>
+                        <div class="form-group">
+                            <label>وقت الانتهاء</label>
+                            <input type="datetime-local" class="form-input" id="offerEnd">
                         </div>
                     </div>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-save"></i> حفظ الإعدادات
+                    </button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="card mt-3">
+            <div class="card-header">
+                <h3>المنتجات المخفضة</h3>
+                <button class="btn btn-success" onclick="app.showAddOfferModal()">
+                    <i class="fas fa-plus"></i> إضافة منتج
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>المنتج</th>
+                                <th>السعر الأصلي</th>
+                                <th>نسبة الخصم</th>
+                                <th>السعر بعد الخصم</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="offersTableBody"></tbody>
+                    </table>
                 </div>
+            </div>
+        </div>
+    </div>
+    
+    <div id="offersContestsContent" style="display: none;">
+        <div class="card">
+            <div class="card-header">
+                <h3>إدارة المسابقات</h3>
+                <button class="btn btn-success" onclick="app.showAddContestModal()">
+                    <i class="fas fa-plus"></i> إضافة مسابقة/بكج
+                </button>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>اسم البكج</th>
+                                <th>الصورة</th>
+                                <th>عدد الحجوزات</th>
+                                <th>الحالة</th>
+                                <th>الإجراءات</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contestsTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
 
                 <!-- صفحة المحادثات -->
                 <div id="chatContent" class="content-section">
