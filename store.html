@@ -22,8 +22,8 @@
                 <nav class="main-nav">
                     <a href="#" class="nav-link active" data-section="home">الرئيسية</a>
                     <a href="#" class="nav-link" data-section="accessories">الإكسسوارات</a>
-                    <a href="#" class="nav-link" data-section="offers">عروض اليوم</a>
-                    <a href="#" class="nav-link" data-section="bestsellers">الأكثر مبيعاً</a>
+                    <a href="#" class="nav-link" data-section="offers">العروض </a>
+                    <a href="#" class="nav-link" data-section="whatsnew">ما الجديد 🔥</a>
                     <a href="#" class="nav-link" data-section="blog">المدونة</a>
                     <a href="#" class="nav-link" data-section="about">من نحن</a>
                     <a href="#" class="nav-link" data-section="contact">تواصل معنا</a>
@@ -32,10 +32,6 @@
                     <button class="cart-btn" onclick="app.toggleCart()">
                         <i class="fas fa-shopping-cart"></i>
                         <span class="cart-count" id="cartCount">0</span>
-                    </button>
-                    <button class="lang-btn" onclick="app.toggleLanguage()">
-                        <i class="fas fa-globe"></i>
-                        <span>EN</span>
                     </button>
                     <button class="mobile-menu-btn" id="mobileMenuBtn">
                         <i class="fas fa-bars"></i>
@@ -231,35 +227,58 @@
     </section>
 
     <!-- ========== قسم الأكثر مبيعاً ========== -->
-    <section id="bestsellersSection" class="section">
-        <div class="container">
-            <div class="section-header">
-                <h2>🔥 الأكثر مبيعاً</h2>
-                <p class="section-subtitle">المنتجات الأكثر طلباً هذا الأسبوع</p>
-            </div>
-            <div class="products-grid" id="bestsellersProducts"></div>
+    <section id="whatsnewSection" class="section">
+    <div class="container">
+        <div class="section-header">
+            <h2 class="section-title">ما الجديد 🔥</h2>
+            <p class="section-subtitle">اكتشف أحدث منتجاتنا والأكثر مبيعاً</p>
         </div>
-    </section>
+        
+        <div class="whatsnew-tabs">
+            <button class="btn btn-primary active" id="bestsellersTab" onclick="app.showWhatsNewTab('bestsellers')">
+                <i class="fas fa-fire"></i> الأكثر مبيعاً
+            </button>
+            <button class="btn btn-outline" id="newArrivalsTab" onclick="app.showWhatsNewTab('newarrivals')">
+                <i class="fas fa-box-open"></i> وصل حديثاً
+            </button>
+        </div>
+        
+        <div id="whatsnewBestsellersContent">
+            <div class="products-grid" id="whatsnewBestsellersGrid"></div>
+        </div>
+        
+        <div id="whatsnewNewArrivalsContent" style="display: none;">
+            <div class="products-grid" id="whatsnewNewArrivalsGrid"></div>
+        </div>
+    </div>
+</section>
 
     <!-- ========== قسم عروض اليوم ========== -->
     <section id="offersSection" class="section">
-        <div class="container">
-            <div class="section-header">
-                <h2>🔥 عروض اليوم</h2>
-                <p class="section-subtitle">خصومات حصرية لفترة محدودة</p>
-            </div>
-
-            <div class="offers-banner">
-                <div class="offer-highlight">
-                    <i class="fas fa-clock"></i>
-                    <span>العرض ينتهي خلال:</span>
-                    <div class="countdown" id="countdown">23:59:59</div>
-                </div>
-            </div>
-
-            <div class="products-grid" id="offersProducts"></div>
+    <div class="container">
+        <div class="section-header">
+            <h2 class="section-title">العروض 🎁</h2>
+            <p class="section-subtitle">استفد من أفضل العروض والمسابقات</p>
         </div>
-    </section>
+        
+        <div class="offers-tabs">
+            <button class="btn btn-primary active" id="discountsTab" onclick="app.showOffersTab('discounts')">
+                <i class="fas fa-percentage"></i> المنتجات المخفضة
+            </button>
+            <button class="btn btn-outline" id="contestsTab" onclick="app.showOffersTab('contests')">
+                <i class="fas fa-gift"></i> المسابقات
+            </button>
+        </div>
+        
+        <div id="offersDiscountsContent">
+            <div class="products-grid" id="offersDiscountsGrid"></div>
+        </div>
+        
+        <div id="offersContestsContent" style="display: none;">
+            <div class="products-grid" id="offersContestsGrid"></div>
+        </div>
+    </div>
+</section>
 
     <!-- ========== قسم المدونة ========== -->
     <section id="blogSection" class="section">
@@ -337,117 +356,71 @@
     <!-- ========== قسم تواصل معنا ========== -->
     <section id="contactSection" class="section">
     <div class="container">
-        <div class="contact-container">
-            <div class="contact-info">
-                <h2>تواصل معنا</h2>
-                <p style="color: var(--text-muted); line-height: 1.8; margin-bottom: 30px; font-size: 16px;">
-                    نحن هنا لخدمتك! اختر الطريقة المناسبة للتواصل معنا وسنرد عليك في أسرع وقت.
-                </p>
-                
-                <div class="contact-buttons-grid">
-                    <!-- زر الاتصال المباشر -->
-                    <a href="tel:07738414085" id="phoneContactBtn" class="contact-action-btn phone-btn">
-                        <div class="contact-btn-icon">
-                            <i class="fas fa-phone-alt"></i>
-                        </div>
-                        <div class="contact-btn-text">
-                            <h4>اتصال مباشر</h4>
-                            <p>اضغط للاتصال بنا فوراً</p>
-                        </div>
-                        <div class="contact-btn-arrow">
-                            <i class="fas fa-arrow-left"></i>
-                        </div>
-                    </a>
-                    
-                    <!-- زر الواتساب -->
-                    <a href="#" id="whatsappContactBtn" target="_blank" class="contact-action-btn whatsapp-btn-style">
-                        <div class="contact-btn-icon">
-                            <i class="fab fa-whatsapp"></i>
-                        </div>
-                        <div class="contact-btn-text">
-                            <h4>واتساب</h4>
-                            <p>راسلنا عبر واتساب</p>
-                        </div>
-                        <div class="contact-btn-arrow">
-                            <i class="fas fa-arrow-left"></i>
-                        </div>
-                    </a>
-                    
-                    <!-- زر الدردشة -->
-                    <button class="contact-action-btn chat-btn-style" onclick="app.toggleChat()">
-                        <div class="contact-btn-icon">
-                            <i class="fas fa-comments"></i>
-                        </div>
-                        <div class="contact-btn-text">
-                            <h4>دردشة مباشرة</h4>
-                            <p>تحدث معنا الآن</p>
-                        </div>
-                        <div class="contact-btn-arrow">
-                            <i class="fas fa-arrow-left"></i>
-                        </div>
-                    </button>
-                    
-                    <!-- زر البريد الإلكتروني -->
-                    <a href="mailto:info@mistore.com" class="contact-action-btn email-btn">
-                        <div class="contact-btn-icon">
-                            <i class="fas fa-envelope"></i>
-                        </div>
-                        <div class="contact-btn-text">
-                            <h4>البريد الإلكتروني</h4>
-                            <p>أرسل لنا إيميل</p>
-                        </div>
-                        <div class="contact-btn-arrow">
-                            <i class="fas fa-arrow-left"></i>
-                        </div>
-                    </a>
+        <div class="section-header">
+            <h2 class="section-title">تواصل معنا</h2>
+            <p class="section-subtitle">نحن هنا لمساعدتك</p>
+        </div>
+        
+        <div class="contact-buttons-grid">
+            <!-- زر الاتصال المباشر -->
+            <a href="tel:07738414085" id="contactPhoneBtn" class="contact-action-btn phone-btn">
+                <div class="contact-btn-icon">
+                    <i class="fas fa-phone-alt"></i>
                 </div>
-            </div>
+                <div class="contact-btn-text">
+                    <h4>اتصال مباشر</h4>
+                    <p>07738414085</p>
+                </div>
+                <div class="contact-btn-arrow">
+                    <i class="fas fa-arrow-left"></i>
+                </div>
+            </a>
             
-            <div class="contact-form-section">
-                <h3>📩 دردشة سريعة</h3>
-                <p style="color: var(--text-muted); margin-bottom: 20px; font-size: 14px;">
-                    أرسل لنا رسالة وسنرد عليك في أقرب وقت
-                </p>
-                <form id="contactForm">
-                    <div class="form-group">
-                        <label>الاسم</label>
-                        <input type="text" class="form-input" id="contactName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>رقم الهاتف</label>
-                        <input type="tel" class="form-input" id="contactPhone" required>
-                    </div>
-                    <div class="form-group">
-                        <label>الرسالة</label>
-                        <textarea class="form-textarea" id="contactMessage" rows="4" required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-primary btn-block">
-                        <i class="fas fa-paper-plane"></i>
-                        إرسال
-                    </button>
-                </form>
-                
-                <hr style="margin: 30px 0; border: none; border-top: 1px solid var(--border-color);">
-                
-                <h3>💬 دردشة مباشرة</h3>
-                <form id="footerChatForm">
-                    <div class="form-group">
-                        <label>اسمك</label>
-                        <input type="text" class="form-input" id="chatName" required>
-                    </div>
-                    <div class="form-group">
-                        <label>رقم هاتفك</label>
-                        <input type="tel" class="form-input" id="chatPhone" required>
-                    </div>
-                    <div class="form-group">
-                        <label>رسالتك</label>
-                        <textarea class="form-textarea" id="chatMessage" rows="3" required></textarea>
-                    </div>
-                    <button type="submit" class="btn btn-success btn-block">
-                        <i class="fas fa-paper-plane"></i>
-                        إرسال عبر الشات
-                    </button>
-                </form>
+            <!-- زر الواتساب -->
+            <a href="#" id="contactWhatsappBtn" target="_blank" class="contact-action-btn whatsapp-btn">
+                <div class="contact-btn-icon">
+                    <i class="fab fa-whatsapp"></i>
+                </div>
+                <div class="contact-btn-text">
+                    <h4>واتساب</h4>
+                    <p>راسلنا مباشرة</p>
+                </div>
+                <div class="contact-btn-arrow">
+                    <i class="fas fa-arrow-left"></i>
+                </div>
+            </a>
+            
+            <!-- زر الفيسبوك -->
+            <a href="#" id="contactFacebookBtn" target="_blank" class="contact-action-btn facebook-btn">
+                <div class="contact-btn-icon">
+                    <i class="fab fa-facebook-f"></i>
+                </div>
+                <div class="contact-btn-text">
+                    <h4>فيسبوك</h4>
+                    <p>تابعنا على فيسبوك</p>
+                </div>
+                <div class="contact-btn-arrow">
+                    <i class="fas fa-arrow-left"></i>
+                </div>
+            </a>
+        </div>
+        
+        <!-- معلومات التواصل في الفوتر -->
+        <div class="contact-footer-info" style="margin-top: 50px; padding: 30px; background: var(--bg-light); border-radius: var(--border-radius-lg); text-align: center;">
+            <h3 style="margin-bottom: 20px; color: var(--text-dark)">معلومات التواصل</h3>
+            <div style="display: flex; justify-content: center; gap: 20px; flex-wrap: wrap;">
+                <a href="tel:07738414085" style="display: flex; align-items: center; gap: 8px; color: var(--text-dark); text-decoration: none;">
+                    <i class="fas fa-phone" style="color: var(--primary);"></i>
+                    <span>07738414085</span>
+                </a>
+                <a href="https://wa.me/9647738414085" target="_blank" style="display: flex; align-items: center; gap: 8px; color: var(--text-dark); text-decoration: none;">
+                    <i class="fab fa-whatsapp" style="color: #25D366;"></i>
+                    <span>واتساب</span>
+                </a>
+                <a href="https://www.facebook.com/share/1BQnn3YMHZ/" target="_blank" style="display: flex; align-items: center; gap: 8px; color: var(--text-dark); text-decoration: none;">
+                    <i class="fab fa-facebook" style="color: #1877F2;"></i>
+                    <span>فيسبوك</span>
+                </a>
             </div>
         </div>
     </div>
