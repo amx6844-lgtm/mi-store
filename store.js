@@ -71,6 +71,7 @@ class StoreApp {
         this.language = 'ar';
         this.appliedDiscount = null;
         
+        
         // بيانات ثابتة
         this.blogPosts = [
             { 
@@ -143,6 +144,7 @@ class StoreApp {
         this.updateCartUI();
         this.startCountdown();
         this.setupWhatsApp();
+        this.loadContactInfo();
         this.showNotification();
         await this.loadAboutContent();
         
@@ -291,6 +293,7 @@ class StoreApp {
         await this.renderOffers();
         this.renderBlog();
         this.renderTestimonials();
+        await this.renderWhatsNewBestsellers();
     }
 
     async getProducts() {
@@ -976,6 +979,79 @@ class StoreApp {
         update();
         setInterval(update, 1000);
     }
+    // ===== قسم ما الجديد =====
+showWhatsNewTab(tab) {
+    const bestsellersContent = document.getElementById('whatsnewBestsellersContent');
+    const newArrivalsContent = document.getElementById('whatsnewNewArrivalsContent');
+    const bestsellersBtn = document.getElementById('bestsellersTab');
+    const newArrivalsBtn = document.getElementById('newArrivalsTab');
+    
+    if (tab === 'bestsellers') {
+        bestsellersContent.style.display = 'block';
+        newArrivalsContent.style.display = 'none';
+        bestsellersBtn.classList.add('active');
+        newArrivalsBtn.classList.remove('active');
+        this.renderWhatsNewBestsellers();
+    } else {
+        bestsellersContent.style.display = 'none';
+        newArrivalsContent.style.display = 'block';
+        bestsellersBtn.classList.remove('active');
+        newArrivalsBtn.classList.add('active');
+        this.renderWhatsNewNewArrivals();
+    }
+}
+
+async renderWhatsNewBestsellers() {
+    const sales = await this.storage.get('sales', []);
+    const products = await this.getProducts();
+    
+    const productSales = {};
+    sales.forEach(sale => {
+        if (sale.status !== 'cancelled') {
+            sale.items.forEach(item => {
+                productSales[item.productId] = (productSales[item.productId] || 0) + item.quantity;
+            });
+        }
+    });
+    
+    const bestsellers = products.map(p => ({
+        ...p,
+        salesCount: productSales[p.id] || 0
+    })).sort((a, b) => b.salesCount - a.salesCount).slice(0, 12);
+    
+    const container = document.getElementById('whatsnewBestsellersGrid');
+    if (!container) return;
+    
+    if (bestsellers.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-fire"></i><p>لا توجد منتجات الأكثر مبيعاً بعد</p></div>';
+        return;
+    }
+    
+    container.innerHTML = bestsellers.map(p => this.createProductCard(p, 'hot')).join('');
+}
+
+async renderWhatsNewNewArrivals() {
+    const products = await this.getProducts();
+    
+    // المنتجات المضافة في آخر شهر
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    
+    const newArrivals = products.filter(p => {
+        const createdAt = new Date(p.createdAt);
+        return createdAt >= oneMonthAgo;
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    const container = document.getElementById('whatsnewNewArrivalsGrid');
+    if (!container) return;
+    
+    if (newArrivals.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i><p>لا توجد منتجات وصلت حديثاً</p></div>';
+        return;
+    }
+    
+    container.innerHTML = newArrivals.map(p => this.createProductCard(p, 'new')).join('');
+}
 
     // ===== الإشعارات =====
     showNotification(title, message, type = 'success') {
@@ -1078,22 +1154,258 @@ class StoreApp {
     }
 
     // ===== تعدد اللغات =====
-    toggleLanguage() {
-        this.language = this.language === 'ar' ? 'en' : 'ar';
-        const html = document.documentElement;
-        html.dir = this.language === 'ar' ? 'rtl' : 'ltr';
-        html.lang = this.language;
-        
-        const btn = document.querySelector('.lang-btn span');
-        if (btn) btn.textContent = this.language === 'ar' ? 'EN' : 'ع';
-
-        this.showNotification('تم', `تم تغيير اللغة إلى ${this.language === 'ar' ? 'العربية' : 'English'}`, 'info');
-    }
 
     // ===== أدوات مساعدة =====
     formatCurrency(amount) {
         return new Intl.NumberFormat('ar-IQ').format(amount || 0) + ' د.ع';
     }
+    // ===== تحميل معلومات التواصل =====
+loadContactInfo() {
+    const settings = this.storage.getLocal('settings', {});
+    const phone = settings.storePhone || '07738414085';
+    
+    // تحديث أزرار التواصل
+    const phoneBtn = document.getElementById('contactPhoneBtn');
+    if (phoneBtn) phoneBtn.href = `tel:${phone}`;
+    
+    const whatsappBtn = document.getElementById('contactWhatsappBtn');
+    if (whatsappBtn) {
+        const cleanPhone = phone.replace(/\D/g, '');
+        whatsappBtn.href = `https://wa.me/${cleanPhone}`;
+    }
+    
+    const facebookBtn = document.getElementById('contactFacebookBtn');
+    if (facebookBtn) {
+        facebookBtn.href = 'https://www.facebook.com/share/1BQnn3YMHZ/';
+        facebookBtn.target = '_blank';
+    }
+}
+// ===== قسم ما الجديد =====
+showWhatsNewTab(tab) {
+    const bestsellersContent = document.getElementById('whatsnewBestsellersContent');
+    const newArrivalsContent = document.getElementById('whatsnewNewArrivalsContent');
+    const bestsellersBtn = document.getElementById('bestsellersTab');
+    const newArrivalsBtn = document.getElementById('newArrivalsTab');
+    
+    if (tab === 'bestsellers') {
+        bestsellersContent.style.display = 'block';
+        newArrivalsContent.style.display = 'none';
+        bestsellersBtn.classList.add('active');
+        newArrivalsBtn.classList.remove('active');
+        this.renderWhatsNewBestsellers();
+    } else {
+        bestsellersContent.style.display = 'none';
+        newArrivalsContent.style.display = 'block';
+        bestsellersBtn.classList.remove('active');
+        newArrivalsBtn.classList.add('active');
+        this.renderWhatsNewNewArrivals();
+    }
+}
+
+async renderWhatsNewBestsellers() {
+    const sales = await this.storage.get('sales', []);
+    const products = await this.getProducts();
+    
+    const productSales = {};
+    sales.forEach(sale => {
+        if (sale.status !== 'cancelled') {
+            sale.items.forEach(item => {
+                productSales[item.productId] = (productSales[item.productId] || 0) + item.quantity;
+            });
+        }
+    });
+    
+    const bestsellers = products.map(p => ({
+        ...p,
+        salesCount: productSales[p.id] || 0
+    })).sort((a, b) => b.salesCount - a.salesCount).slice(0, 12);
+    
+    const container = document.getElementById('whatsnewBestsellersGrid');
+    if (!container) return;
+    
+    if (bestsellers.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-fire"></i><p>لا توجد منتجات الأكثر مبيعاً بعد</p></div>';
+        return;
+    }
+    
+    container.innerHTML = bestsellers.map(p => this.createProductCard(p, 'hot')).join('');
+}
+
+async renderWhatsNewNewArrivals() {
+    const products = await this.getProducts();
+    
+    const oneMonthAgo = new Date();
+    oneMonthAgo.setMonth(oneMonthAgo.getMonth() - 1);
+    
+    const newArrivals = products.filter(p => {
+        const createdAt = new Date(p.createdAt);
+        return createdAt >= oneMonthAgo;
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    
+    const container = document.getElementById('whatsnewNewArrivalsGrid');
+    if (!container) return;
+    
+    if (newArrivals.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-box-open"></i><p>لا توجد منتجات وصلت حديثاً</p></div>';
+        return;
+    }
+    
+    container.innerHTML = newArrivals.map(p => this.createProductCard(p, 'new')).join('');
+}
+
+// ===== تبويب العروض =====
+showOffersTab(tab) {
+    const discountsContent = document.getElementById('offersDiscountsContent');
+    const contestsContent = document.getElementById('offersContestsContent');
+    const discountsBtn = document.getElementById('discountsTab');
+    const contestsBtn = document.getElementById('contestsTab');
+    
+    if (tab === 'discounts') {
+        discountsContent.style.display = 'block';
+        contestsContent.style.display = 'none';
+        discountsBtn.classList.add('active');
+        contestsBtn.classList.remove('active');
+        this.renderOffersDiscounts();
+    } else {
+        discountsContent.style.display = 'none';
+        contestsContent.style.display = 'block';
+        discountsBtn.classList.remove('active');
+        contestsBtn.classList.add('active');
+        this.renderOffersContests();
+    }
+}
+
+async renderOffersDiscounts() {
+    const offers = await this.storage.get('offers', { products: [] });
+    const products = await this.getProducts();
+    
+    const offerProducts = offers.products.map(op => {
+        const product = products.find(p => p.id === op.productId);
+        if (product) return { ...product, offerDiscount: op.discount };
+        return null;
+    }).filter(p => p !== null);
+    
+    const container = document.getElementById('offersDiscountsGrid');
+    if (!container) return;
+    
+    if (offerProducts.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-percentage"></i><p>لا توجد منتجات مخفضة حالياً</p></div>';
+        return;
+    }
+    
+    container.innerHTML = offerProducts.map(p => {
+        const discountedPrice = p.salePrice * (1 - p.offerDiscount / 100);
+        return `
+            <div class="product-card" onclick="app.showProductDetails(${p.id})">
+                <div class="product-image">
+                    ${p.image ? `<img src="${p.image}" alt="${p.name}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-box"></i>'}
+                    <span class="product-badge">-${p.offerDiscount}%</span>
+                </div>
+                <div class="product-info">
+                    <h3 class="product-name">${p.name}</h3>
+                    <div class="product-price">
+                        <span class="price-current">${this.formatCurrency(discountedPrice)}</span>
+                        <span class="price-old">${this.formatCurrency(p.salePrice)}</span>
+                    </div>
+                    <button class="product-btn" onclick="event.stopPropagation(); app.addToCart(${p.id})">
+                        <i class="fas fa-cart-plus"></i> أضف للسلة
+                    </button>
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+async renderOffersContests() {
+    const contests = await this.storage.get('contests', []);
+    const container = document.getElementById('offersContestsGrid');
+    if (!container) return;
+    
+    if (contests.length === 0) {
+        container.innerHTML = '<div class="empty-state"><i class="fas fa-gift"></i><p>لا توجد مسابقات حالياً</p></div>';
+        return;
+    }
+    
+    container.innerHTML = contests.map(contest => `
+        <div class="product-card">
+            <div class="product-image">
+                ${contest.image ? `<img src="${contest.image}" alt="${contest.name}" style="width:100%;height:100%;object-fit:cover;">` : '<i class="fas fa-gift"></i>'}
+                <span class="product-badge new">مسابقة</span>
+            </div>
+            <div class="product-info">
+                <h3 class="product-name">${contest.name}</h3>
+                <p style="font-size:13px;color:var(--text-muted);margin:8px 0">${contest.description || ''}</p>
+                <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+                    <i class="fas fa-users"></i> ${contest.bookings ? contest.bookings.length : 0} حجز
+                </div>
+                <button class="product-btn" onclick="app.bookContest(${contest.id})">
+                    <i class="fas fa-ticket-alt"></i> احجز الآن
+                </button>
+            </div>
+        </div>
+    `).join('');
+}
+
+async bookContest(contestId) {
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+    
+    const content = `
+        <div style="text-align:center;margin-bottom:20px">
+            ${contest.image ? `<img src="${contest.image}" style="max-width:200px;border-radius:12px;margin-bottom:15px;">` : ''}
+            <h3>${contest.name}</h3>
+            <p style="color:var(--text-muted)">${contest.description || ''}</p>
+        </div>
+        <form id="bookingForm">
+            <div class="form-group">
+                <label>الاسم الكامل *</label>
+                <input type="text" class="form-input" id="bookingName" required>
+            </div>
+            <div class="form-group">
+                <label>رقم الهاتف *</label>
+                <input type="tel" class="form-input" id="bookingPhone" required>
+            </div>
+        </form>
+    `;
+    
+    const footer = `
+        <button class="btn btn-outline" onclick="app.closeModal()">إلغاء</button>
+        <button class="btn btn-primary" onclick="app.confirmBooking(${contestId})">
+            <i class="fas fa-check"></i> تأكيد الحجز
+        </button>
+    `;
+    
+    document.getElementById('modalContent').innerHTML = content;
+    document.getElementById('productModal').classList.add('active');
+}
+
+async confirmBooking(contestId) {
+    const name = document.getElementById('bookingName').value.trim();
+    const phone = document.getElementById('bookingPhone').value.trim();
+    
+    if (!name || !phone) {
+        this.showNotification('تنبيه', 'يرجى ملء جميع الحقول', 'warning');
+        return;
+    }
+    
+    const contests = await this.storage.get('contests', []);
+    const contest = contests.find(c => c.id === contestId);
+    if (!contest) return;
+    
+    if (!contest.bookings) contest.bookings = [];
+    
+    contest.bookings.push({
+        name,
+        phone,
+        date: new Date().toISOString()
+    });
+    
+    await this.storage.set('contests', contests);
+    this.closeModal();
+    this.showNotification('تم الحجز', 'تم حجزك في المسابقة بنجاح!', 'success');
+    await this.renderOffersContests();
+}
 }
 
 // ========== بدء التشغيل ==========
