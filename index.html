@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
@@ -6,6 +7,9 @@
     <title>Mi Store - نظام إدارة المحل المتكامل</title>
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
 </head>
 <body>
     <!-- ========== صفحة تسجيل الدخول ========== -->
@@ -157,6 +161,12 @@
                     <li class="nav-item" data-page="reports">
                         <a href="#"><i class="fas fa-chart-line"></i><span>التقارير</span></a>
                     </li>
+                    <li class="nav-item" data-page="notes">
+    <a href="#"><i class="fas fa-sticky-note"></i><span>الملاحظات</span></a>
+</li>
+<li class="nav-item" data-page="backup">
+    <a href="#"><i class="fas fa-database"></i><span>النسخ الاحتياطي</span></a>
+</li>
                     <li class="nav-item" data-page="settings">
                         <a href="#"><i class="fas fa-cog"></i><span>الإعدادات</span></a>
                     </li>
@@ -713,7 +723,121 @@
                         </div>
                     </div>
                 </div>
-
+                <!-- صفحة الملاحظات -->
+<div id="notesContent" class="content-section">
+    <div class="page-header">
+        <h2>الملاحظات</h2>
+        <button class="btn btn-primary" onclick="app.showAddNoteModal()">
+            <i class="fas fa-plus"></i>
+            إضافة ملاحظة
+        </button>
+    </div>
+    <div class="card">
+        <div class="card-body">
+            <div class="table-container">
+                <table class="data-table" id="notesTable">
+                    <thead>
+                        <tr>
+                            <th>العنوان</th>
+                            <th>المحتوى</th>
+                            <th>التاريخ</th>
+                            <th>الوقت</th>
+                            <th>الإجراءات</th>
+                        </tr>
+                    </thead>
+                    <tbody id="notesTableBody"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+<!-- صفحة النسخ الاحتياطي -->
+<!-- صفحة النسخ الاحتياطي -->
+<div id="backupContent" class="content-section">
+    <div class="page-header">
+        <h2>النسخ الاحتياطي</h2>
+    </div>
+    
+    <div class="dashboard-grid">
+        <!-- تصدير المنتجات كملف JSON -->
+        <div class="card">
+            <div class="card-header" style="background: linear-gradient(135deg, #27AE60, #1E8449); color: white;">
+                <h3 style="color: white;"><i class="fas fa-file-export"></i> تصدير المنتجات</h3>
+            </div>
+            <div class="card-body">
+                <p style="margin-bottom: 15px; color: var(--text-secondary);">
+                    <i class="fas fa-info-circle" style="color: var(--info);"></i>
+                    سيتم حفظ جميع المنتجات في ملف JSON على جهازك
+                </p>
+                <div style="background: #e8f5e9; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <p style="font-size: 13px; color: #1b5e20; margin: 0;">
+                        ✅ <strong>مميزات التصدير:</strong><br>
+                        • يحفظ جميع البيانات (الأسعار، الكميات، الصور)<br>
+                        • يمكن فتحه في أي محرر نصوص<br>
+                        • آمن وموثوق 100%<br>
+                        • لا يوجد حد لحجم البيانات
+                    </p>
+                </div>
+                <button class="btn btn-success" onclick="app.exportProductsAsJSON()" style="width: 100%; padding: 14px; font-size: 15px;">
+                    <i class="fas fa-download"></i> تصدير المنتجات كملف JSON
+                </button>
+                <div id="exportStatus" style="margin-top: 15px; text-align: center;"></div>
+            </div>
+        </div>
+        
+        <!-- استيراد المنتجات من ملف JSON -->
+        <div class="card">
+            <div class="card-header" style="background: linear-gradient(135deg, #3498DB, #2874A6); color: white;">
+                <h3 style="color: white;"><i class="fas fa-file-import"></i> استيراد المنتجات</h3>
+            </div>
+            <div class="card-body">
+                <p style="margin-bottom: 15px; color: var(--text-secondary);">
+                    <i class="fas fa-info-circle" style="color: var(--info);"></i>
+                    اختر ملف JSON من جهازك لاستعادة المنتجات
+                </p>
+                <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                    <p style="font-size: 13px; color: #0d47a1; margin: 0;">
+                        ⚠️ <strong>تنبيه مهم:</strong><br>
+                        • سيتم استبدال المنتجات الحالية بالملف<br>
+                        • تأكد من عمل نسخة احتياطية أولاً<br>
+                        • يجب أن يكون الملف بصيغة JSON صحيحة
+                    </p>
+                </div>
+                <input type="file" id="importJsonFile" accept=".json" style="display: none;" onchange="app.handleFileSelect(event)">
+                <button class="btn btn-info" onclick="document.getElementById('importJsonFile').click()" style="width: 100%; padding: 14px; font-size: 15px;">
+                    <i class="fas fa-upload"></i> اختيار ملف JSON للاستيراد
+                </button>
+                <div id="importStatus" style="margin-top: 15px; text-align: center;"></div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- معلومات النسخ الاحتياطية السابقة -->
+    <div class="card" style="margin-top: 20px;">
+        <div class="card-header">
+            <h3><i class="fas fa-history"></i> معلومات النسخ الاحتياطية</h3>
+        </div>
+        <div class="card-body">
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                <div style="background: var(--bg-input); padding: 15px; border-radius: 8px; text-align: center;">
+                    <i class="fas fa-box" style="font-size: 24px; color: var(--primary); margin-bottom: 8px;"></i>
+                    <h4 id="backupProductsCount" style="font-size: 24px; font-weight: 800; color: var(--primary);">0</h4>
+                    <p style="font-size: 13px; color: var(--text-muted);">منتج في الموقع</p>
+                </div>
+                <div style="background: var(--bg-input); padding: 15px; border-radius: 8px; text-align: center;">
+                    <i class="fas fa-calendar" style="font-size: 24px; color: var(--success); margin-bottom: 8px;"></i>
+                    <h4 id="backupLastDate" style="font-size: 16px; font-weight: 700; color: var(--success);">-</h4>
+                    <p style="font-size: 13px; color: var(--text-muted);">آخر نسخة احتياطية</p>
+                </div>
+                <div style="background: var(--bg-input); padding: 15px; border-radius: 8px; text-align: center;">
+                    <i class="fas fa-database" style="font-size: 24px; color: var(--info); margin-bottom: 8px;"></i>
+                    <h4 id="backupSize" style="font-size: 24px; font-weight: 800; color: var(--info);">0 KB</h4>
+                    <p style="font-size: 13px; color: var(--text-muted);">حجم البيانات</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
                 <!-- صفحة الإعدادات -->
                 <div id="settingsContent" class="content-section">
     <div class="page-header">
@@ -894,7 +1018,7 @@
 
   // تهيئة Firebase
   firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
+  window.db = firebase.firestore();
   
   console.log('✅ تم الاتصال بـ Firebase بنجاح');
   console.log('Project ID:', firebaseConfig.projectId);
