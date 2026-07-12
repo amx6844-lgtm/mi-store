@@ -190,7 +190,10 @@
                     <select id="categoryFilter" onchange="app.applyFilters()">
                         <option value="all">الكل</option>
                         <option value="cases">الكفرات</option>
-                        <option value="screen">واقيات الشاشة</option>
+                        <option value="stickers">اللواصق</option>
+                        <option value="chargers">الشواحن</option>
+                        <option value="watches">الساعات</option>
+                        <option value="glasses">النظارات</option>
                         <option value="accessories">الملحقات</option>
                     </select>
                 </div>
@@ -218,8 +221,10 @@
             <div class="sub-categories">
                 <button class="sub-cat-btn active" data-cat="all">الكل</button>
                 <button class="sub-cat-btn" data-cat="cases">الكفرات</button>
-                <button class="sub-cat-btn" data-cat="screen">واقيات الشاشة</button>
-                <button class="sub-cat-btn" data-cat="accessories">الملحقات</button>
+<button class="sub-cat-btn" data-cat="stickers">اللواصق</button>
+<button class="sub-cat-btn" data-cat="chargers">الشواحن</button>
+<button class="sub-cat-btn" data-cat="watches">الساعات</button>
+<button class="sub-cat-btn" data-cat="glasses">النظارات</button>                <button class="sub-cat-btn" data-cat="accessories">الملحقات</button>
             </div>
 
             <div class="products-grid" id="accessoriesProducts"></div>
@@ -496,7 +501,7 @@
                 </div>
                 <div class="footer-section">
                     <h4>تواصل معنا</h4>
-                    <p><i class="fas fa-phone"></i> <span id="footerPhone">07700000000</span></p>
+                    <p><i class="fas fa-phone"></i> <span id="footerPhone">07738414085</span></p>
                     <div class="social-links">
                         <a href="#" class="social-link"><i class="fab fa-facebook"></i></a>
                         <a href="#" class="social-link"><i class="fab fa-instagram"></i></a>
@@ -524,7 +529,7 @@
   };
 
   firebase.initializeApp(firebaseConfig);
-  const db = firebase.firestore();
+window.db = firebase.firestore();
   
   console.log('✅ تم الاتصال بـ Firebase في موقع الزبائن');
 </script>
