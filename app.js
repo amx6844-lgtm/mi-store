@@ -2,16 +2,20 @@
 class StorageManager {
     constructor() {
         this.prefix = 'mi_store_';
-        this.useFirebase = typeof db !== 'undefined';
+        this.useFirebase = typeof window.db !== 'undefined' && window.db !== null;
         console.log('📊 نظام التخزين:', this.useFirebase ? 'Firebase ✅' : 'LocalStorage فقط');
     }
     
     async get(key, defaultValue = null) {
+        // ✅ المنتجات تُجلب من collection منفصل
+        if (key === 'products') {
+            return await this.getAllProducts();
+        }
+        
         if (this.useFirebase) {
             try {
-                const doc = await db.collection('mistore').doc(key).get();
+                const doc = await window.db.collection('mistore').doc(key).get();
                 if (doc.exists) {
-                    console.log('📥 تم جلب', key, 'من Firebase');
                     return doc.data().value;
                 }
                 return defaultValue;
@@ -25,13 +29,17 @@ class StorageManager {
     }
     
     async set(key, value) {
+        // ✅ المنتجات تُحفظ في collection منفصل
+        if (key === 'products') {
+            return await this.saveAllProducts(value);
+        }
+        
         if (this.useFirebase) {
             try {
-                await db.collection('mistore').doc(key).set({
+                await window.db.collection('mistore').doc(key).set({
                     value: value,
                     updatedAt: new Date().toISOString()
                 });
-                console.log('📤 تم حفظ', key, 'في Firebase');
                 return true;
             } catch (error) {
                 console.error('❌ خطأ في حفظ البيانات:', error);
@@ -42,10 +50,106 @@ class StorageManager {
         }
     }
     
+    // ✅ جلب جميع المنتجات من collection منفصل
+    async getAllProducts() {
+        if (!this.useFirebase) {
+            return this.getLocal('products', []);
+        }
+        try {
+            const snapshot = await window.db.collection('products').get();
+            const products = [];
+            snapshot.forEach(doc => {
+                products.push({ id: parseInt(doc.id), ...doc.data() });
+            });
+            // ترتيب حسب ID
+            products.sort((a, b) => a.id - b.id);
+            return products;
+        } catch (error) {
+            console.error('❌ خطأ في جلب المنتجات:', error);
+            return this.getLocal('products', []);
+        }
+    }
+    
+    // ✅ حفظ جميع المنتجات (يُستخدم للترحيل فقط)
+    async saveAllProducts(products) {
+        if (!this.useFirebase) {
+            return this.setLocal('products', products);
+        }
+        try {
+            // حذف القديم أولاً
+            const oldSnapshot = await window.db.collection('products').get();
+            const batch = window.db.batch();
+            oldSnapshot.forEach(doc => batch.delete(doc.ref));
+            await batch.commit();
+            
+            // حفظ الجديد
+            for (const product of products) {
+                const { id, ...data } = product;
+                await window.db.collection('products').doc(String(id)).set(data);
+            }
+            return true;
+        } catch (error) {
+            console.error('❌ خطأ في حفظ المنتجات:', error);
+            return this.setLocal('products', products);
+        }
+    }
+    
+    // ✅ إضافة منتج واحد (سريع)
+    async addProduct(product) {
+        if (!this.useFirebase) {
+            const products = this.getLocal('products', []);
+            products.push(product);
+            return this.setLocal('products', products);
+        }
+        try {
+            const { id, ...data } = product;
+            await window.db.collection('products').doc(String(id)).set(data);
+            return true;
+        } catch (error) {
+            console.error('❌ خطأ في إضافة المنتج:', error);
+            return false;
+        }
+    }
+    
+    // ✅ تحديث منتج واحد (سريع)
+    async updateProduct(id, data) {
+        if (!this.useFirebase) {
+            const products = this.getLocal('products', []);
+            const idx = products.findIndex(p => p.id === id);
+            if (idx !== -1) {
+                products[idx] = { ...products[idx], ...data };
+                return this.setLocal('products', products);
+            }
+            return false;
+        }
+        try {
+            await window.db.collection('products').doc(String(id)).update(data);
+            return true;
+        } catch (error) {
+            console.error('❌ خطأ في تحديث المنتج:', error);
+            return false;
+        }
+    }
+    
+    // ✅ حذف منتج واحد (سريع)
+    async deleteProductDoc(id) {
+        if (!this.useFirebase) {
+            const products = this.getLocal('products', []);
+            return this.setLocal('products', products.filter(p => p.id !== id));
+        }
+        try {
+            await window.db.collection('products').doc(String(id)).delete();
+            return true;
+        } catch (error) {
+            console.error('❌ خطأ في حذف المنتج:', error);
+            return false;
+        }
+    }
+    
     async remove(key) {
         if (this.useFirebase) {
             try {
-                await db.collection('mistore').doc(key).delete();
+                await window.db.collection('mistore').doc(key).delete();
             } catch (error) {
                 console.error('❌ خطأ في الحذف:', error);
             }
@@ -164,7 +268,6 @@ class MiStoreApp {
         this.cart = [];
         this.currentChatId = null;
         this.selectedProductImage = null;
-        
         this.init();
     }
     
@@ -174,15 +277,25 @@ class MiStoreApp {
         this.checkAuth();
     }
     
-    // ===== تهيئة البيانات =====
+    // ===== تهيئة البيانات - محدّث =====
     async initData() {
         console.log('🔄 بدء تهيئة البيانات...');
         
         if (typeof db !== 'undefined') {
             try {
+                // التحقق من وجود المنتجات في البنية الجديدة
+                const productsSnapshot = await db.collection('products').get();
+                if (!productsSnapshot.empty) {
+                    console.log('✅ المنتجات موجودة مسبقاً في Firebase (بنية جديدة)');
+                    return;
+                }
+                
+                // التحقق من البيانات القديمة
                 const existingData = await db.collection('mistore').doc('initialized').get();
                 if (existingData.exists && existingData.data().value === true) {
-                    console.log('✅ البيانات موجودة مسبقاً في Firebase');
+                    console.log('✅ البيانات موجودة مسبقاً في Firebase (بنية قديمة)');
+                    // ترحيل البيانات القديمة إلى البنية الجديدة
+                    await this.migrateOldData();
                     return;
                 }
             } catch (error) {
@@ -197,7 +310,6 @@ class MiStoreApp {
         }
         
         console.log('📦 إنشاء البيانات الافتراضية...');
-        
         await this.storage.set('products', [
             { id: 1, code: 'PH-001', name: 'Xiaomi Redmi Note 13', category: 'phones', purchasePrice: 180000, salePrice: 220000, quantity: 15, minQuantity: 5, description: 'هاتف شاومي ريدمي نوت 13', image: null, createdAt: new Date().toISOString() },
             { id: 2, code: 'PH-002', name: 'Xiaomi 14 Pro', category: 'phones', purchasePrice: 650000, salePrice: 780000, quantity: 8, minQuantity: 3, description: 'هاتف شاومي 14 برو', image: null, createdAt: new Date().toISOString() },
@@ -235,12 +347,12 @@ class MiStoreApp {
         
         await this.storage.set('chats', []);
         
-        await this.storage.set('settings', { 
-            storeName: 'Mi Store', 
-            storeAddress: 'بغداد - العراق', 
-            storePhone: '07700000000', 
-            currency: 'IQD', 
-            taxRate: 0 
+        await this.storage.set('settings', {
+            storeName: 'Mi Store',
+            storeAddress: 'بغداد - العراق',
+            storePhone: '07738414085',
+            currency: 'IQD',
+            taxRate: 0
         });
         
         await this.storage.set('about', {
@@ -259,14 +371,35 @@ class MiStoreApp {
         console.log('✅ تم إنشاء جميع البيانات الافتراضية بنجاح');
     }
     
+    // ✅ ترحيل البيانات القديمة إلى البنية الجديدة
+    async migrateOldData() {
+        try {
+            console.log('🔄 بدء ترحيل البيانات القديمة...');
+            const oldProductsDoc = await db.collection('mistore').doc('products').get();
+            
+            if (oldProductsDoc.exists) {
+                const oldProducts = oldProductsDoc.data().value;
+                console.log('📦 تم العثور على', oldProducts.length, 'منتج في البنية القديمة');
+                
+                // حفظ في البنية الجديدة
+                await this.storage.set('products', oldProducts);
+                console.log('✅ تم ترحيل المنتجات إلى البنية الجديدة');
+                
+                // حذف البيانات القديمة
+                await db.collection('mistore').doc('products').delete();
+                console.log('🗑️ تم حذف البيانات القديمة');
+            }
+        } catch (error) {
+            console.error('❌ خطأ في الترحيل:', error);
+        }
+    }
+    
     // ===== التحقق من المصادقة =====
     async checkAuth() {
         const loginPage = document.getElementById('loginPage');
         const dashboardPage = document.getElementById('dashboardPage');
-        
         if (loginPage) loginPage.classList.remove('active');
         if (dashboardPage) dashboardPage.classList.remove('active');
-        
         if (this.auth.isAuthenticated()) {
             if (dashboardPage) dashboardPage.classList.add('active');
             if (loginPage) loginPage.classList.remove('active');
@@ -279,7 +412,6 @@ class MiStoreApp {
             console.log('✅ تم عرض صفحة تسجيل الدخول');
         }
     }
-
     
     // ===== تهيئة تسجيل الدخول =====
     initLogin() {
@@ -288,7 +420,6 @@ class MiStoreApp {
         const passwordInput = document.getElementById('password');
         const loginBtn = document.getElementById('loginBtn');
         const loginMessage = document.getElementById('loginMessage');
-        
         const remembered = localStorage.getItem('mi_store_remembered');
         if (remembered) {
             try {
@@ -297,7 +428,6 @@ class MiStoreApp {
                 document.getElementById('rememberMe').checked = true;
             } catch { }
         }
-        
         toggleBtn.addEventListener('click', () => {
             const icon = toggleBtn.querySelector('i');
             if (passwordInput.type === 'password') {
@@ -314,48 +444,37 @@ class MiStoreApp {
             const username = document.getElementById('username').value.trim();
             const password = passwordInput.value;
             const rememberMe = document.getElementById('rememberMe').checked;
-            
             if (!username || !password) {
                 loginMessage.textContent = 'يرجى إدخال جميع البيانات';
                 loginMessage.className = 'login-message show error';
                 return;
             }
-            
             loginBtn.classList.add('loading');
             loginBtn.disabled = true;
             loginMessage.className = 'login-message';
-            
             await new Promise(r => setTimeout(r, 700));
-            
             const result = this.auth.login(username, password);
-            
             loginBtn.classList.remove('loading');
             loginBtn.disabled = false;
-            
             if (result.success) {
                 if (rememberMe) {
                     localStorage.setItem('mi_store_remembered', JSON.stringify({ username }));
                 } else {
                     localStorage.removeItem('mi_store_remembered');
                 }
-                
                 loginMessage.textContent = 'تم تسجيل الدخول بنجاح!';
                 loginMessage.className = 'login-message show success';
-                
                 setTimeout(() => {
                     const loginPage = document.getElementById('loginPage');
                     const dashboardPage = document.getElementById('dashboardPage');
-                    
                     if (loginPage) {
                         loginPage.classList.remove('active');
                         loginPage.style.display = 'none';
                     }
-                    
                     if (dashboardPage) {
                         dashboardPage.classList.add('active');
                         dashboardPage.style.display = 'flex';
                     }
-                    
                     this.initDashboard();
                     console.log('✅ تم التحويل إلى لوحة التحكم');
                 }, 800);
@@ -364,6 +483,7 @@ class MiStoreApp {
                 loginMessage.className = 'login-message show error';
                 passwordInput.value = '';
             }
+            
         });
     }
     
@@ -390,24 +510,19 @@ class MiStoreApp {
                 this.navigateTo(item.dataset.page);
             });
         });
-        
         document.getElementById('logoutBtn').addEventListener('click', () => {
             this.modal.confirm('تسجيل الخروج', 'هل أنت متأكد؟', () => this.auth.logout());
         });
-        
         document.getElementById('sidebarToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('collapsed');
         });
-        
         document.getElementById('menuToggle').addEventListener('click', () => {
             document.getElementById('sidebar').classList.toggle('mobile-open');
         });
-        
         document.getElementById('settingsForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             await this.saveSettings();
         });
-        
         const aboutForm = document.getElementById('aboutForm');
         if (aboutForm) {
             aboutForm.addEventListener('submit', async (e) => {
@@ -426,12 +541,11 @@ class MiStoreApp {
         document.querySelectorAll('.content-section').forEach(section => section.classList.remove('active'));
         const content = document.getElementById(page + 'Content');
         if (content) content.classList.add('active');
-        
-        const titles = { 
-            dashboard: 'الرئيسية', products: 'المنتجات', inventory: 'المخزون', 
-            sales: 'المبيعات', purchases: 'المشتريات', suppliers: 'الموردين', 
+        const titles = {
+            dashboard: 'الرئيسية', products: 'المنتجات', inventory: 'المخزون',
+            sales: 'المبيعات', purchases: 'المشتريات', suppliers: 'الموردين',
             customers: 'العملاء', discounts: 'أكواد الخصم', offers: 'عروض اليوم',
-            chat: 'المحادثات', printing: 'الطباعة', reports: 'التقارير', settings: 'الإعدادات' 
+            chat: 'المحادثات', printing: 'الطباعة', reports: 'التقارير', settings: 'الإعدادات'
         };
         document.getElementById('pageTitle').textContent = titles[page] || page;
         document.getElementById('sidebar').classList.remove('mobile-open');
@@ -439,6 +553,7 @@ class MiStoreApp {
     }
     
     refreshPageContent(page) {
+        
         const map = {
             dashboard: () => { this.updateStats(); this.renderRecentSales(); this.renderLowStock(); this.renderRecentChats(); this.updateChatBadge(); },
             products: () => this.renderProductsTable(),
@@ -450,9 +565,13 @@ class MiStoreApp {
             discounts: () => this.renderDiscountsTable(),
             offers: () => { this.renderOffersTable(); this.loadOfferSettings(); },
             chat: () => { this.renderChatList(); if (this.currentChatId) this.openChat(this.currentChatId); },
-            settings: () => this.loadSettings()
+            settings: () => this.loadSettings(),
+            notes: () => this.renderNotesTable(),
+            backup: () => {}, // لا يحتاج تحميل بيانات
+            backup: () => this.updateBackupInfo(),
         };
         if (map[page]) map[page]();
+        
     }
     
     // ===== الإحصائيات =====
@@ -463,7 +582,6 @@ class MiStoreApp {
         const today = new Date().toDateString();
         const todaySales = sales.filter(s => new Date(s.date).toDateString() === today);
         const todayRevenue = todaySales.reduce((sum, s) => sum + s.total, 0);
-        
         document.getElementById('totalProducts').textContent = products.length;
         document.getElementById('totalSales').textContent = todaySales.length;
         document.getElementById('totalRevenue').textContent = this.formatCurrency(todayRevenue);
@@ -507,7 +625,8 @@ class MiStoreApp {
             `).join('');
         }
     }
-        async renderRecentChats() {
+    
+    async renderRecentChats() {
         const chats = await this.storage.get('chats', []);
         const recent = chats.slice(-3).reverse();
         const container = document.getElementById('recentChatsList');
@@ -561,8 +680,15 @@ class MiStoreApp {
             tbody.innerHTML = '<tr><td colspan="7"><div class="empty-state"><i class="fas fa-box-open"></i><p>لا توجد منتجات</p></div></td></tr>';
             return;
         }
-        const categories = { phones: 'هواتف', accessories: 'إكسسوارات', chargers: 'شواحن', cases: 'كفرات' };
-        tbody.innerHTML = filtered.map(p => `
+const categories = { 
+    phones: 'هواتف', 
+    accessories: 'الملحقات', 
+    chargers: 'الشواحن', 
+    cases: 'كفرات',
+    stickers: 'اللواصق',
+    watches: 'الساعات',
+    glasses: 'النظارات'
+};        tbody.innerHTML = filtered.map(p => `
             <tr>
                 <td><strong>${p.code}</strong></td>
                 <td>${p.name}</td>
@@ -585,7 +711,6 @@ class MiStoreApp {
     openProductModal(product = null) {
         const isEdit = !!product;
         this.selectedProductImage = product?.image || null;
-        
         const body = `
             <form id="productForm">
                 <div class="form-row">
@@ -596,6 +721,10 @@ class MiStoreApp {
                             <option value="accessories" ${product?.category === 'accessories' ? 'selected' : ''}>إكسسوارات</option>
                             <option value="chargers" ${product?.category === 'chargers' ? 'selected' : ''}>شواحن</option>
                             <option value="cases" ${product?.category === 'cases' ? 'selected' : ''}>كفرات</option>
+                            <option value="stickers" ${product?.category === 'stickers' ? 'selected' : ''}>اللواصق</option>
+<option value="chargers" ${product?.category === 'chargers' ? 'selected' : ''}>الشواحن</option>
+<option value="watches" ${product?.category === 'watches' ? 'selected' : ''}>الساعات</option>
+<option value="glasses" ${product?.category === 'glasses' ? 'selected' : ''}>النظارات</option>
                         </select>
                     </div>
                 </div>
@@ -633,44 +762,27 @@ class MiStoreApp {
         this.modal.open(isEdit ? 'تعديل المنتج' : 'إضافة منتج جديد', body, footer);
     }
     
-    previewImage(input) {
-    console.log('📸 تم اختيار ملف:', input.files?.[0]?.name);
-    const preview = document.getElementById('imagePreview');
-    const previewImg = document.getElementById('previewImg');
+    async previewImage(input) {
+    const file = input.files[0];
+    if (!file) return;
     
-    if (input.files && input.files[0]) {
-        const file = input.files[0];
-        console.log(' حجم الملف:', (file.size / 1024).toFixed(2), 'KB');
-        
-        // التحقق من نوع الملف
-        if (!file.type.startsWith('image/')) {
-            alert('⚠️ الملف المحدد ليس صورة!');
-            return;
-        }
-        
-        // التحقق من الحجم (2MB كحد أقصى)
-        const maxSize = 2 * 1024 * 1024;
-        if (file.size > maxSize) {
-            alert(`⚠️ حجم الصورة كبير جداً! (${(file.size / 1024 / 1024).toFixed(2)} MB). الحد الأقصى 2MB`);
-            return;
-        }
-        
-        // ✅ حفظ الصورة في المتغير (هذا هو الإصلاح!)
-        this.selectedProductImage = file;
-        console.log('✅ تم حفظ الصورة في المتغير selectedProductImage');
-        
-        // عرض المعاينة
-        const reader = new FileReader();
-        reader.onload = function (e) {
-            previewImg.src = e.target.result;
-            preview.style.display = 'block';
-            console.log('✅ تم عرض معاينة الصورة بنجاح');
-        };
-        reader.onerror = function () {
-            alert('❌ خطأ في قراءة الملف');
-        };
-        reader.readAsDataURL(file);
+    // فحص حجم الملف (حد أقصى 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+        this.toast.error('خطأ', 'حجم الصورة كبير جداً (الحد الأقصى 2MB)');
+        input.value = '';
+        return;
     }
+    
+    // عرض رسالة للمستخدم
+    this.toast.info('جاري الرفع', 'يتم رفع الصورة إلى imgbb...');
+    
+    // تحويل إلى base64 للعرض المؤقت
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        this.selectedProductImage = e.target.result;
+        this.toast.warning('تنبيه', 'يرجى رفع الصورة على imgbb واستخدام الرابط بدلاً من الرفع المباشر');
+    };
+    reader.readAsDataURL(file);
 }
     
     compressImage(file, maxWidth = 800, quality = 0.7) {
@@ -682,18 +794,14 @@ class MiStoreApp {
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    
                     if (width > maxWidth) {
                         height = (height * maxWidth) / width;
                         width = maxWidth;
                     }
-                    
                     canvas.width = width;
                     canvas.height = height;
-                    
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
-                    
                     const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
                     const byteString = atob(compressedDataUrl.split(',')[1]);
                     const ab = new ArrayBuffer(byteString.length);
@@ -703,12 +811,10 @@ class MiStoreApp {
                     }
                     const blob = new Blob([ab], { type: 'image/jpeg' });
                     const compressedFile = new File([blob], file.name.replace(/\.[^/.]+$/, '.jpg'), { type: 'image/jpeg' });
-                    
                     console.log('🗜️ تم ضغط الصورة:');
                     console.log('   الحجم الأصلي:', (file.size / 1024).toFixed(2), 'KB');
                     console.log('   الحجم بعد الضغط:', (compressedFile.size / 1024).toFixed(2), 'KB');
                     console.log('   نسبة الضغط:', ((1 - compressedFile.size / file.size) * 100).toFixed(1), '%');
-                    
                     resolve(compressedFile);
                 };
                 img.onerror = () => reject(new Error('فشل في تحميل الصورة للضغط'));
@@ -722,7 +828,6 @@ class MiStoreApp {
     async uploadImageToImgBB(file) {
         const API_KEY = 'aa486b5eb4e44ab46aad73a3420b0270';
         console.log('📸 بدء رفع الصورة إلى ImgBB...');
-        
         let compressedFile;
         try {
             compressedFile = await this.compressImage(file, 800, 0.7);
@@ -730,29 +835,23 @@ class MiStoreApp {
             console.warn('⚠️ فشل ضغط الصورة:', error);
             compressedFile = file;
         }
-        
         const formData = new FormData();
         formData.append('image', compressedFile);
         formData.append('key', API_KEY);
-        
         try {
             const response = await fetch('https://api.imgbb.com/1/upload', {
                 method: 'POST',
                 body: formData
             });
-            
             const data = await response.json();
             console.log('📥 استجابة ImgBB:', data);
-            
             if (data.success && data.data) {
                 const imageUrl = data.data.url || data.data.display_url;
                 console.log('✅ تم رفع الصورة بنجاح!');
                 console.log('🔗 رابط الصورة:', imageUrl);
-                
                 if (!imageUrl || !imageUrl.startsWith('http')) {
                     throw new Error('الرابط المستلم غير صالح: ' + imageUrl);
                 }
-                
                 return imageUrl;
             } else {
                 throw new Error(data.error?.message || 'فشل غير معروف');
@@ -764,11 +863,8 @@ class MiStoreApp {
     }
     
     async saveProduct(id) {
-    console.log('💾 بدء عملية حفظ المنتج...');
-    console.log('🔑 ID:', id ? `تعديل منتج #${id}` : 'منتج جديد');
-    
+    console.log('💾 بدء حفظ المنتج...');
     try {
-        // ===== 1. جمع البيانات من النموذج =====
         const code = document.getElementById('pCode').value.trim();
         const name = document.getElementById('pName').value.trim();
         const category = document.getElementById('pCategory').value;
@@ -777,140 +873,69 @@ class MiStoreApp {
         const quantity = parseInt(document.getElementById('pQuantity').value);
         const minQuantity = parseInt(document.getElementById('pMinQuantity').value) || 5;
         const description = document.getElementById('pDescription').value.trim();
-        
-        console.log('📝 البيانات المجمعة:', { code, name, category, purchasePrice, salePrice, quantity });
-        
-        // ===== 2. التحقق من صحة البيانات =====
+
         if (!code || !name || isNaN(purchasePrice) || isNaN(salePrice) || isNaN(quantity)) {
-            console.error('❌ بيانات غير كاملة');
-            this.toast.error('خطأ', 'يرجى ملء جميع الحقول المطلوبة');
+            this.toast.error('خطأ', 'يرجى ملء جميع الحقول');
             return;
         }
-        
-        // ===== 3. معالجة الصورة - رفعها إلى ImgBB =====
-        // ===== 3. معالجة الصورة =====
-let imageUrl = null;
-const imageInput = document.getElementById('pImage');
 
-// ✅ استخدام الصورة من المتغير (المحفوظة عند الاختيار)
-const fileToUpload = this.selectedProductImage || (imageInput?.files?.[0]);
+        let imageUrl = null;
+        const imageInput = document.getElementById('pImage');
+        const fileToUpload = this.selectedProductImage instanceof File 
+            ? this.selectedProductImage 
+            : (imageInput?.files?.[0] instanceof File ? imageInput.files[0] : null);
 
-if (fileToUpload) {
-    console.log('📸 الصورة المختارة:');
-    console.log('   الاسم:', fileToUpload.name);
-    console.log('   الحجم:', (fileToUpload.size / 1024).toFixed(2), 'KB');
-    console.log('   النوع:', fileToUpload.type);
-    
-    // إظهار رسالة للمستخدم
-    this.toast.info('جاري', 'جاري ضغط ورفع الصورة إلى ImgBB...');
-    
-    try {
-        // رفع الصورة إلى ImgBB (مع ضغط تلقائي)
-        imageUrl = await this.uploadImageToImgBB(fileToUpload);
-        console.log('✅ تم رفع الصورة بنجاح!');
-        console.log('🔗 رابط الصورة:', imageUrl);
-    } catch (error) {
-        console.error('❌ فشل رفع الصورة:', error);
-        this.toast.error('خطأ', 'فشل رفع الصورة: ' + error.message);
-        return; // إيقاف العملية
-    }
-} else {
-    console.log('⚠️ لم يتم اختيار صورة جديدة');
-}
-        
-        // ===== 4. جلب المنتجات الحالية من Firebase =====
-        const products = await this.storage.get('products', []);
-        console.log('📦 عدد المنتجات الحالي:', products.length);
-        
-        // ===== 5. حفظ أو تحديث المنتج =====
-        if (id) {
-            // ===== تعديل منتج موجود =====
-            console.log('✏️ تعديل منتج موجود...');
-            const index = products.findIndex(p => p.id === id);
-            if (index !== -1) {
-                const existingProduct = products[index];
-                products[index] = { 
-                    ...existingProduct, 
-                    code, name, category, purchasePrice, salePrice, quantity, minQuantity, description,
-                    // استخدام الصورة الجديدة إن وجدت، وإلا الاحتفاظ بالقديمة
-                    image: imageUrl || existingProduct.image,
-                    updatedAt: new Date().toISOString()
-                };
-                
-                // حفظ في Firebase
-                await this.storage.set('products', products);
-                console.log('✅ تم تحديث المنتج في Firebase');
-                this.toast.success('تم', `تم تحديث المنتج "${name}" بنجاح`);
-            } else {
-                console.error('❌ المنتج غير موجود');
-                this.toast.error('خطأ', 'المنتج غير موجود');
+        if (fileToUpload) {
+            this.toast.info('جاري', 'جاري رفع الصورة...');
+            try {
+                imageUrl = await this.uploadImageToImgBB(fileToUpload);
+            } catch (error) {
+                this.toast.error('خطأ', 'فشل رفع الصورة: ' + error.message);
                 return;
             }
-        } else {
-            // ===== إضافة منتج جديد =====
-            console.log('➕ إضافة منتج جديد...');
+        }
+
+        // ✅ البنية الجديدة: كل منتج مستند منفصل
+        if (id) {
+            const updateData = {
+                code, name, category, purchasePrice, salePrice, 
+                quantity, minQuantity, description,
+                updatedAt: new Date().toISOString()
+            };
+            if (imageUrl) updateData.image = imageUrl;
             
-            // حساب ID جديد
+            await window.db.collection('products').doc(String(id)).update(updateData);
+            this.toast.success('تم', `تم تحديث "${name}"`);
+        } else {
+            const products = await this.storage.get('products', []);
             const newId = products.length > 0 
                 ? Math.max(...products.map(p => p.id)) + 1 
                 : 1;
             
-            const newProduct = { 
-                id: newId, 
-                code, name, category, purchasePrice, salePrice, quantity, minQuantity, description, 
-                image: imageUrl, // ✅ رابط الصورة من ImgBB
-                createdAt: new Date().toISOString() 
+            const newProduct = {
+                id: newId, code, name, category, purchasePrice, 
+                salePrice, quantity, minQuantity, description,
+                image: imageUrl,
+                createdAt: new Date().toISOString()
             };
             
-            products.push(newProduct);
-            
-            // حفظ في Firebase
-            await this.storage.set('products', products);
-            console.log('✅ تم إضافة المنتج الجديد بنجاح');
-            console.log('🆔 ID المنتج الجديد:', newId);
-            this.toast.success('تم', `تم إضافة المنتج "${name}" بنجاح`);
+            await window.db.collection('products').doc(String(newId)).set(newProduct);
+            this.toast.success('تم', `تم إضافة "${name}"`);
         }
-        
-        // ===== 6. إعادة تعيين الحقول =====
-        console.log('🔄 إعادة تعيين الحقول...');
+
         this.selectedProductImage = null;
-        
-        if (imageInput) {
-            imageInput.value = '';
-            console.log('✅ تم إعادة تعيين حقل الصورة');
-        }
-        
-        // إخفاء المعاينة
+        if (imageInput) imageInput.value = '';
         const preview = document.getElementById('imagePreview');
-        if (preview) {
-            preview.style.display = 'none';
-        }
-        
-        // ===== 7. إغلاق النافذة وتحديث الواجهة =====
+        if (preview) preview.style.display = 'none';
+
         this.modal.close();
         await this.renderProductsTable();
         await this.renderInventoryTable();
         await this.updateStats();
         await this.renderLowStock();
-        
-        // ===== 8. فحص المنتجات المحفوظة =====
-        const savedProducts = await this.storage.get('products', []);
-        console.log('📊 المنتجات المحفوظة:', savedProducts.length);
-        savedProducts.forEach((p, idx) => {
-            const imageStatus = p.image 
-                ? `✅ صورة (${p.image.substring(0, 40)}...)` 
-                : '❌ بدون صورة';
-            console.log(`   ${idx + 1}. ${p.name} - ${imageStatus}`);
-        });
-        
-        console.log('=================================');
-        console.log('✅ تم حفظ المنتج بنجاح');
-        console.log('=================================');
-        
     } catch (error) {
-        console.error('❌ خطأ غير متوقع في saveProduct:', error);
-        console.error('Stack:', error.stack);
-        this.toast.error('خطأ', 'حدث خطأ: ' + error.message);
+        console.error('❌ خطأ:', error);
+        this.toast.error('خطأ', error.message);
     }
 }
     
@@ -921,17 +946,19 @@ if (fileToUpload) {
     }
     
     async deleteProduct(id) {
-        this.modal.confirm('حذف المنتج', 'هل أنت متأكد؟', async () => {
-            let products = await this.storage.get('products', []);
-            products = products.filter(p => p.id !== id);
-            await this.storage.set('products', products);
+    this.modal.confirm('حذف المنتج', 'هل أنت متأكد؟', async () => {
+        try {
+            await window.db.collection('products').doc(String(id)).delete();
             this.toast.success('تم', 'تم حذف المنتج');
             await this.renderProductsTable();
             await this.renderInventoryTable();
             await this.updateStats();
             await this.renderLowStock();
-        });
-    }
+        } catch (error) {
+            this.toast.error('خطأ', error.message);
+        }
+    });
+}
     
     // ===== المخزون =====
     async renderInventoryTable() {
@@ -1023,18 +1050,14 @@ if (fileToUpload) {
         const productId = parseInt(document.getElementById('stockProduct').value);
         const qty = parseInt(document.getElementById('stockQty').value);
         const notes = document.getElementById('stockNotes').value.trim();
-        
         if (!productId || !qty || qty <= 0) { this.toast.error('خطأ', 'بيانات غير صحيحة'); return; }
-        
         const products = await this.storage.get('products', []);
         const product = products.find(p => p.id === productId);
         if (!product) return;
-        
         if (type === 'out' && qty > product.quantity) {
             this.toast.error('خطأ', `الكمية أكبر من الرصيد (${product.quantity})`);
             return;
         }
-        
         if (type === 'in') {
             product.quantity += qty;
             const price = parseFloat(document.getElementById('stockPrice').value);
@@ -1042,9 +1065,7 @@ if (fileToUpload) {
         } else {
             product.quantity -= qty;
         }
-        
         await this.storage.set('products', products);
-        
         const movements = await this.storage.get('stockMovements', []);
         movements.push({
             id: movements.length + 1, productId, productName: product.name,
@@ -1052,7 +1073,6 @@ if (fileToUpload) {
             date: new Date().toISOString(), user: this.auth.getCurrentUser()?.fullName || 'admin'
         });
         await this.storage.set('stockMovements', movements);
-        
         this.modal.close();
         this.toast.success('تم', `تم تسجيل ${type === 'in' ? 'الوارد' : 'الصادر'}`);
         await this.renderInventoryTable();
@@ -1139,15 +1159,12 @@ if (fileToUpload) {
         const qty = parseInt(document.getElementById('saleProductQty').value);
         if (!select.value) { this.toast.warning('تنبيه', 'اختر منتج'); return; }
         if (!qty || qty <= 0) { this.toast.warning('تنبيه', 'كمية غير صحيحة'); return; }
-        
         const option = select.options[select.selectedIndex];
         const productId = parseInt(select.value);
         const price = parseFloat(option.dataset.price);
         const stock = parseInt(option.dataset.stock);
         const productName = option.textContent.split(' - ')[1];
-        
         if (qty > stock) { this.toast.error('خطأ', `الكمية أكبر من المتوفر (${stock})`); return; }
-        
         const existing = this.cart.find(item => item.productId === productId);
         if (existing) {
             const newQty = existing.quantity + qty;
@@ -1228,91 +1245,80 @@ if (fileToUpload) {
     }
     
     async saveSale() {
-    if (this.cart.length === 0) { 
-        this.toast.warning('تنبيه', 'السلة فارغة!'); 
-        return; 
-    }
-    
-    const customerId = parseInt(document.getElementById('saleCustomer').value) || null;
-    const customers = await this.storage.get('customers', []);
-    const customer = customers.find(c => c.id === customerId);
-    
-    const subtotal = this.cart.reduce((sum, item) => sum + item.total, 0);
-    const discount = parseFloat(document.getElementById('cartDiscount').value) || 0;
-    const settings = await this.storage.get('settings', {});
-    const taxRate = settings.taxRate || 0;
-    const tax = (subtotal - discount) * (taxRate / 100);
-    const total = subtotal - discount + tax;
-    const paid = parseFloat(document.getElementById('salePaid').value) || 0;
-    const paymentMethod = document.getElementById('salePayment').value;
-    const notes = document.getElementById('saleNotes').value.trim();
-    
-    let status = 'paid';
-    if (paymentMethod === 'credit') status = 'pending';
-    else if (paid < total) status = 'pending';
-    
-    const sales = await this.storage.get('sales', []);
-    const sale = {
-        id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
-        invoiceNumber: this.generateInvoiceNumber('INV'),
-        date: new Date().toISOString(),
-        customerId, 
-        customerName: customer?.name || 'عميل نقدي',
-        customerPhone: customer?.phone || '',
-        items: this.cart.map(item => ({ ...item })),
-        subtotal, discount, tax, total, paid, 
-        remaining: Math.max(0, total - paid),
-        paymentMethod, notes, status,
-        user: this.auth.getCurrentUser()?.fullName || 'admin'
-    };
-    sales.push(sale);
-    await this.storage.set('sales', sales);
-    
-    // ===== خصم الكميات من المخزون =====
-    const products = await this.storage.get('products', []);
-    for (const cartItem of this.cart) {
-        const product = products.find(p => p.id === cartItem.productId);
-        if (product) {
-            product.quantity -= cartItem.quantity;
-            
-            // تسجيل حركة المخزون
-            const movements = await this.storage.get('stockMovements', []);
-            movements.push({
-                id: movements.length + 1,
-                productId: product.id, 
-                productName: product.name,
-                type: 'sale', 
-                quantity: cartItem.quantity, 
-                price: cartItem.price,
-                reference: sale.invoiceNumber, 
-                date: sale.date, 
-                user: sale.user
-            });
-            await this.storage.set('stockMovements', movements);
+        if (this.cart.length === 0) {
+            this.toast.warning('تنبيه', 'السلة فارغة!');
+            return;
         }
-    }
-    await this.storage.set('products', products);
-    
-    // تحديث رصيد العميل
-    if (customerId && sale.remaining > 0) {
+        const customerId = parseInt(document.getElementById('saleCustomer').value) || null;
+        const customers = await this.storage.get('customers', []);
         const customer = customers.find(c => c.id === customerId);
-        if (customer) {
-            customer.balance = (customer.balance || 0) + sale.remaining;
-            await this.storage.set('customers', customers);
+        const subtotal = this.cart.reduce((sum, item) => sum + item.total, 0);
+        const discount = parseFloat(document.getElementById('cartDiscount').value) || 0;
+        const settings = await this.storage.get('settings', {});
+        const taxRate = settings.taxRate || 0;
+        const tax = (subtotal - discount) * (taxRate / 100);
+        const total = subtotal - discount + tax;
+        const paid = parseFloat(document.getElementById('salePaid').value) || 0;
+        const paymentMethod = document.getElementById('salePayment').value;
+        const notes = document.getElementById('saleNotes').value.trim();
+        let status = 'paid';
+        if (paymentMethod === 'credit') status = 'pending';
+        else if (paid < total) status = 'pending';
+        const sales = await this.storage.get('sales', []);
+        const sale = {
+            id: sales.length > 0 ? Math.max(...sales.map(s => s.id)) + 1 : 1,
+            invoiceNumber: this.generateInvoiceNumber('INV'),
+            date: new Date().toISOString(),
+            customerId,
+            customerName: customer?.name || 'عميل نقدي',
+            customerPhone: customer?.phone || '',
+            items: this.cart.map(item => ({ ...item })),
+            subtotal, discount, tax, total, paid,
+            remaining: Math.max(0, total - paid),
+            paymentMethod, notes, status,
+            user: this.auth.getCurrentUser()?.fullName || 'admin'
+        };
+        sales.push(sale);
+        await this.storage.set('sales', sales);
+        const products = await this.storage.get('products', []);
+        for (const cartItem of this.cart) {
+            const product = products.find(p => p.id === cartItem.productId);
+            if (product) {
+                product.quantity -= cartItem.quantity;
+                const movements = await this.storage.get('stockMovements', []);
+                movements.push({
+                    id: movements.length + 1,
+                    productId: product.id,
+                    productName: product.name,
+                    type: 'sale',
+                    quantity: cartItem.quantity,
+                    price: cartItem.price,
+                    reference: sale.invoiceNumber,
+                    date: sale.date,
+                    user: sale.user
+                });
+                await this.storage.set('stockMovements', movements);
+            }
         }
+        await this.storage.set('products', products);
+        if (customerId && sale.remaining > 0) {
+            const customer = customers.find(c => c.id === customerId);
+            if (customer) {
+                customer.balance = (customer.balance || 0) + sale.remaining;
+                await this.storage.set('customers', customers);
+            }
+        }
+        this.modal.close();
+        this.toast.success('تم', `تم حفظ الفاتورة ${sale.invoiceNumber} - تم خصم الكميات من المخزون`);
+        this.printSale(sale.id);
+        this.cart = [];
+        await this.renderSalesTable();
+        await this.renderInventoryTable();
+        await this.renderProductsTable();
+        await this.updateStats();
+        await this.renderRecentSales();
+        await this.renderLowStock();
     }
-    
-    this.modal.close();
-    this.toast.success('تم', `تم حفظ الفاتورة ${sale.invoiceNumber} - تم خصم الكميات من المخزون`);
-    this.printSale(sale.id);
-    this.cart = [];
-    await this.renderSalesTable();
-    await this.renderInventoryTable();
-    await this.renderProductsTable();
-    await this.updateStats();
-    await this.renderRecentSales();
-    await this.renderLowStock();
-}
     
     async viewSale(id) {
         const sales = await this.storage.get('sales', []);
@@ -1354,23 +1360,23 @@ if (fileToUpload) {
         const settings = await this.storage.get('settings', {});
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         printWindow.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة ${sale.invoiceNumber}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}
-.header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}
-.header h1{color:#FF6700;font-size:32px}.header p{color:#6c757d;font-size:14px}
-.info{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px}
-.info-block{background:#f8f9fa;padding:10px;border-radius:6px}
-.info-block h4{font-size:12px;color:#6c757d;margin-bottom:3px}.info-block p{font-size:14px;font-weight:600}
-table{width:100%;border-collapse:collapse;margin-bottom:20px}
-th{background:#FF6700;color:white;padding:10px;text-align:right;font-size:13px}
-td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
-.totals{margin-right:auto;width:300px}.totals .row{display:flex;justify-content:space-between;padding:5px 0}
-.totals .grand{font-size:18px;font-weight:800;color:#FF6700;border-top:2px solid #FF6700;padding-top:8px;margin-top:8px}
-.footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px;border-top:1px solid #dee2e6;padding-top:15px}</style></head>
-<body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>${settings.storeAddress || ''} - ${settings.storePhone || ''}</p><p style="margin-top:8px;font-size:16px;font-weight:700">فاتورة مبيعات</p></div>
-<div class="info"><div class="info-block"><h4>رقم الفاتورة</h4><p>${sale.invoiceNumber}</p></div><div class="info-block"><h4>التاريخ</h4><p>${this.formatDateTime(sale.date)}</p></div><div class="info-block"><h4>العميل</h4><p>${sale.customerName}</p></div><div class="info-block"><h4>طريقة الدفع</h4><p>${sale.paymentMethod === 'cash' ? 'نقدي' : sale.paymentMethod === 'card' ? 'بطاقة' : 'آجل'}</p></div></div>
-<table><thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${sale.items.map((item, i) => `<tr><td>${i + 1}</td><td>${item.productName}</td><td>${item.quantity}</td><td>${this.formatCurrency(item.price)}</td><td>${this.formatCurrency(item.total)}</td></tr>`).join('')}</tbody></table>
-<div class="totals"><div class="row"><span>المجموع:</span><span>${this.formatCurrency(sale.subtotal)}</span></div>${sale.discount > 0 ? `<div class="row"><span>الخصم:</span><span>${this.formatCurrency(sale.discount)}</span></div>` : ''}<div class="row grand"><span>الإجمالي:</span><span>${this.formatCurrency(sale.total)}</span></div><div class="row"><span>المدفوع:</span><span>${this.formatCurrency(sale.paid || sale.total)}</span></div>${sale.remaining > 0 ? `<div class="row" style="color:#E74C3C"><span>المتبقي:</span><span>${this.formatCurrency(sale.remaining)}</span></div>` : ''}</div>
-<div class="footer"><p>شكراً لتعاملكم معنا - ${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+            <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}
+            .header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}
+            .header h1{color:#FF6700;font-size:32px}.header p{color:#6c757d;font-size:14px}
+            .info{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px}
+            .info-block{background:#f8f9fa;padding:10px;border-radius:6px}
+            .info-block h4{font-size:12px;color:#6c757d;margin-bottom:3px}.info-block p{font-size:14px;font-weight:600}
+            table{width:100%;border-collapse:collapse;margin-bottom:20px}
+            th{background:#FF6700;color:white;padding:10px;text-align:right;font-size:13px}
+            td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
+            .totals{margin-right:auto;width:300px}.totals .row{display:flex;justify-content:space-between;padding:5px 0}
+            .totals .grand{font-size:18px;font-weight:800;color:#FF6700;border-top:2px solid #FF6700;padding-top:8px;margin-top:8px}
+            .footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px;border-top:1px solid #dee2e6;padding-top:15px}</style></head>
+            <body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>${settings.storeAddress || ''} - ${settings.storePhone || ''}</p><p style="margin-top:8px;font-size:16px;font-weight:700">فاتورة مبيعات</p></div>
+            <div class="info"><div class="info-block"><h4>رقم الفاتورة</h4><p>${sale.invoiceNumber}</p></div><div class="info-block"><h4>التاريخ</h4><p>${this.formatDateTime(sale.date)}</p></div><div class="info-block"><h4>العميل</h4><p>${sale.customerName}</p></div><div class="info-block"><h4>طريقة الدفع</h4><p>${sale.paymentMethod === 'cash' ? 'نقدي' : sale.paymentMethod === 'card' ? 'بطاقة' : 'آجل'}</p></div></div>
+            <table><thead><tr><th>#</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${sale.items.map((item, i) => `<tr><td>${i + 1}</td><td>${item.productName}</td><td>${item.quantity}</td><td>${this.formatCurrency(item.price)}</td><td>${this.formatCurrency(item.total)}</td></tr>`).join('')}</tbody></table>
+            <div class="totals"><div class="row"><span>المجموع:</span><span>${this.formatCurrency(sale.subtotal)}</span></div>${sale.discount > 0 ? `<div class="row"><span>الخصم:</span><span>${this.formatCurrency(sale.discount)}</span></div>` : ''}<div class="row grand"><span>الإجمالي:</span><span>${this.formatCurrency(sale.total)}</span></div><div class="row"><span>المدفوع:</span><span>${this.formatCurrency(sale.paid || sale.total)}</span></div>${sale.remaining > 0 ? `<div class="row" style="color:#E74C3C"><span>المتبقي:</span><span>${this.formatCurrency(sale.remaining)}</span></div>` : ''}</div>
+            <div class="footer"><p>شكراً لتعاملكم معنا - ${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
         printWindow.document.close();
     }
     
@@ -1493,7 +1499,6 @@ td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
         const price = parseFloat(document.getElementById('purchaseProductPrice').value);
         if (!select.value) { this.toast.warning('تنبيه', 'اختر منتج'); return; }
         if (!qty || qty <= 0 || isNaN(price) || price < 0) { this.toast.warning('تنبيه', 'بيانات غير صحيحة'); return; }
-        
         let productId, productName, productCode, isNew = false;
         if (select.value === '__new__') {
             productCode = document.getElementById('newProductCode').value.trim();
@@ -1507,11 +1512,9 @@ td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
             productName = option.dataset.name;
             productCode = option.dataset.code;
         }
-        
         const existing = this.cart.find(item => item.productId === productId);
         if (existing) { existing.quantity += qty; existing.total = existing.quantity * existing.price; }
         else this.cart.push({ productId, productName, productCode, price, quantity: qty, total: qty * price, isNew });
-        
         this.renderPurchaseCart();
         select.value = '';
         document.getElementById('purchaseProductQty').value = 1;
@@ -1553,18 +1556,15 @@ td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
         if (this.cart.length === 0) { this.toast.warning('تنبيه', 'السلة فارغة!'); return; }
         const supplierId = parseInt(document.getElementById('purchaseSupplier').value);
         if (!supplierId) { this.toast.error('خطأ', 'اختر المورد'); return; }
-        
         const suppliers = await this.storage.get('suppliers', []);
         const supplier = suppliers.find(s => s.id === supplierId);
         const total = this.cart.reduce((sum, item) => sum + item.total, 0);
         const paymentMethod = document.getElementById('purchasePayment').value;
         const paid = parseFloat(document.getElementById('purchasePaid').value) || 0;
         const notes = document.getElementById('purchaseNotes').value.trim();
-        
         let status = 'paid';
         if (paymentMethod === 'credit') status = 'pending';
         else if (paid < total) status = 'pending';
-        
         const purchases = await this.storage.get('purchases', []);
         const purchase = {
             id: purchases.length > 0 ? Math.max(...purchases.map(p => p.id)) + 1 : 1,
@@ -1575,10 +1575,8 @@ td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
         };
         purchases.push(purchase);
         await this.storage.set('purchases', purchases);
-        
         const products = await this.storage.get('products', []);
         const movements = await this.storage.get('stockMovements', []);
-        
         for (const item of this.cart) {
             if (item.isNew) {
                 const newId = products.length > 0 ? Math.max(...products.map(p => p.id)) + 1 : 1;
@@ -1593,15 +1591,12 @@ td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
                 }
             }
         }
-        
         await this.storage.set('products', products);
         await this.storage.set('stockMovements', movements);
-        
         if (purchase.remaining > 0) {
             supplier.balance = (supplier.balance || 0) + purchase.remaining;
             await this.storage.set('suppliers', suppliers);
         }
-        
         this.modal.close();
         this.toast.success('تم', `تم حفظ فاتورة الشراء ${purchase.invoiceNumber}`);
         this.cart = [];
@@ -1649,21 +1644,22 @@ td{padding:10px;border-bottom:1px solid #dee2e6;font-size:13px}
         const settings = await this.storage.get('settings', {});
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         printWindow.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>فاتورة شراء ${p.invoiceNumber}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}
-.header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}.header h1{color:#FF6700;font-size:32px}
-.info{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px}
-.info-block{background:#f8f9fa;padding:10px;border-radius:6px}.info-block h4{font-size:12px;color:#6c757d;margin-bottom:3px}.info-block p{font-size:14px;font-weight:600}
-table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF6700;color:white;padding:10px;text-align:right}td{padding:10px;border-bottom:1px solid #dee2e6}
-.totals{margin-right:auto;width:300px}.totals .row{display:flex;justify-content:space-between;padding:5px 0}.totals .grand{font-size:18px;font-weight:800;color:#FF6700;border-top:2px solid #FF6700;padding-top:8px;margin-top:8px}
-.footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px}</style></head>
-<body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>فاتورة شراء</p></div>
-<div class="info"><div class="info-block"><h4>رقم الفاتورة</h4><p>${p.invoiceNumber}</p></div><div class="info-block"><h4>التاريخ</h4><p>${this.formatDateTime(p.date)}</p></div><div class="info-block"><h4>المورد</h4><p>${p.supplierName}</p></div><div class="info-block"><h4>طريقة الدفع</h4><p>${p.paymentMethod === 'cash' ? 'نقدي' : p.paymentMethod === 'credit' ? 'آجل' : 'جزئي'}</p></div></div>
-<table><thead><tr><th>#</th><th>الكود</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${p.items.map((item, i) => `<tr><td>${i + 1}</td><td>${item.productCode}</td><td>${item.productName}</td><td>${item.quantity}</td><td>${this.formatCurrency(item.price)}</td><td>${this.formatCurrency(item.total)}</td></tr>`).join('')}</tbody></table>
-<div class="totals"><div class="row grand"><span>الإجمالي:</span><span>${this.formatCurrency(p.total)}</span></div><div class="row"><span>المدفوع:</span><span>${this.formatCurrency(p.paid)}</span></div>${p.remaining > 0 ? `<div class="row" style="color:#E74C3C"><span>المتبقي:</span><span>${this.formatCurrency(p.remaining)}</span></div>` : ''}</div>
-<div class="footer"><p>${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+            <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}
+            .header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}.header h1{color:#FF6700;font-size:32px}
+            .info{display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px}
+            .info-block{background:#f8f9fa;padding:10px;border-radius:6px}.info-block h4{font-size:12px;color:#6c757d;margin-bottom:3px}.info-block p{font-size:14px;font-weight:600}
+            table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF6700;color:white;padding:10px;text-align:right}td{padding:10px;border-bottom:1px solid #dee2e6}
+            .totals{margin-right:auto;width:300px}.totals .row{display:flex;justify-content:space-between;padding:5px 0}.totals .grand{font-size:18px;font-weight:800;color:#FF6700;border-top:2px solid #FF6700;padding-top:8px;margin-top:8px}
+            .footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px}</style></head>
+            <body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>فاتورة شراء</p></div>
+            <div class="info"><div class="info-block"><h4>رقم الفاتورة</h4><p>${p.invoiceNumber}</p></div><div class="info-block"><h4>التاريخ</h4><p>${this.formatDateTime(p.date)}</p></div><div class="info-block"><h4>المورد</h4><p>${p.supplierName}</p></div><div class="info-block"><h4>طريقة الدفع</h4><p>${p.paymentMethod === 'cash' ? 'نقدي' : p.paymentMethod === 'credit' ? 'آجل' : 'جزئي'}</p></div></div>
+            <table><thead><tr><th>#</th><th>الكود</th><th>المنتج</th><th>الكمية</th><th>السعر</th><th>الإجمالي</th></tr></thead><tbody>${p.items.map((item, i) => `<tr><td>${i + 1}</td><td>${item.productCode}</td><td>${item.productName}</td><td>${item.quantity}</td><td>${this.formatCurrency(item.price)}</td><td>${this.formatCurrency(item.total)}</td></tr>`).join('')}</tbody></table>
+            <div class="totals"><div class="row grand"><span>الإجمالي:</span><span>${this.formatCurrency(p.total)}</span></div><div class="row"><span>المدفوع:</span><span>${this.formatCurrency(p.paid)}</span></div>${p.remaining > 0 ? `<div class="row" style="color:#E74C3C"><span>المتبقي:</span><span>${this.formatCurrency(p.remaining)}</span></div>` : ''}</div>
+            <div class="footer"><p>${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
         printWindow.document.close();
     }
-        // ===== أدوات مساعدة =====
+    
+    // ===== أدوات مساعدة =====
     formatCurrency(amount) {
         return new Intl.NumberFormat('ar-IQ').format(amount || 0) + ' د.ع';
     }
@@ -1772,9 +1768,7 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const address = document.getElementById('sAddress').value.trim();
         const balance = parseFloat(document.getElementById('sBalance').value) || 0;
         const notes = document.getElementById('sNotes').value.trim();
-        
         if (!code || !name || !phone) { this.toast.error('خطأ', 'يرجى ملء الحقول المطلوبة'); return; }
-        
         const suppliers = await this.storage.get('suppliers', []);
         if (id) {
             const index = suppliers.findIndex(s => s.id === id);
@@ -1822,7 +1816,6 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const totalPurchases = purchases.reduce((sum, p) => sum + p.total, 0);
         const totalPaid = purchases.reduce((sum, p) => sum + (p.paid || 0), 0);
         const totalRemaining = purchases.reduce((sum, p) => sum + (p.remaining || 0), 0);
-        
         const body = `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px">
                 <div style="background:#f8f9fa;padding:15px;border-radius:8px"><h4 style="color:#6c757d;font-size:12px;margin-bottom:5px">كود المورد</h4><p style="font-weight:700">${supplier.code}</p></div>
@@ -1910,9 +1903,7 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const address = document.getElementById('cAddress').value.trim();
         const balance = parseFloat(document.getElementById('cBalance').value) || 0;
         const notes = document.getElementById('cNotes').value.trim();
-        
         if (!code || !name || !phone) { this.toast.error('خطأ', 'يرجى ملء الحقول المطلوبة'); return; }
-        
         const customers = await this.storage.get('customers', []);
         if (id) {
             const index = customers.findIndex(c => c.id === id);
@@ -1960,7 +1951,6 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const totalSales = sales.reduce((sum, s) => sum + s.total, 0);
         const totalPaid = sales.reduce((sum, s) => sum + (s.paid || 0), 0);
         const totalRemaining = sales.reduce((sum, s) => sum + (s.remaining || 0), 0);
-        
         const body = `
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:15px;margin-bottom:20px">
                 <div style="background:#f8f9fa;padding:15px;border-radius:8px"><h4 style="color:#6c757d;font-size:12px;margin-bottom:5px">كود العميل</h4><p style="font-weight:700">${customer.code}</p></div>
@@ -2070,24 +2060,20 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const maxUses = parseInt(document.getElementById('dMaxUses').value);
         const expiryDate = document.getElementById('dExpiry').value;
         const active = document.getElementById('dActive').checked;
-        
         if (!code || isNaN(discount) || isNaN(maxUses) || !expiryDate) {
             this.toast.error('خطأ', 'يرجى ملء جميع الحقول');
             return;
         }
-        
         if (discount < 1 || discount > 100) {
             this.toast.error('خطأ', 'نسبة الخصم يجب أن تكون بين 1 و 100');
             return;
         }
-        
         const discounts = await this.storage.get('discounts', []);
         const exists = discounts.find(d => d.code === code && d.id !== id);
         if (exists) {
             this.toast.error('خطأ', 'هذا الكود موجود مسبقاً');
             return;
         }
-        
         if (id) {
             const index = discounts.findIndex(d => d.id === id);
             if (index !== -1) {
@@ -2158,12 +2144,10 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const title = document.getElementById('offerTitle').value.trim();
         const startTime = document.getElementById('offerStart').value;
         const endTime = document.getElementById('offerEnd').value;
-        
         if (!title || !startTime || !endTime) {
             this.toast.error('خطأ', 'يرجى ملء جميع الحقول');
             return;
         }
-        
         const offers = await this.storage.get('offers', { title: '', startTime: '', endTime: '', products: [] });
         offers.title = title;
         offers.startTime = new Date(startTime).toISOString();
@@ -2206,12 +2190,10 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
         const products = await this.storage.get('products', []);
         const offers = await this.storage.get('offers', { products: [] });
         const availableProducts = products.filter(p => !offers.products.find(op => op.productId === p.id));
-        
         if (availableProducts.length === 0) {
             this.toast.warning('تنبيه', 'جميع المنتجات موجودة في العروض أو لا توجد منتجات');
             return;
         }
-        
         const body = `
             <div class="form-group">
                 <label>اختر المنتج *</label>
@@ -2240,7 +2222,6 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
             <button class="btn btn-primary" onclick="app.saveOfferProduct()"><i class="fas fa-plus"></i> إضافة للعروض</button>
         `;
         this.modal.open('إضافة منتج للعروض', body, footer);
-        
         document.getElementById('offerProductSelect').addEventListener('change', (e) => {
             const product = products.find(p => p.id === parseInt(e.target.value));
             const discount = parseFloat(document.getElementById('offerDiscount').value) || 0;
@@ -2249,7 +2230,6 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
                 document.getElementById('offerFinalPrice').textContent = this.formatCurrency(product.salePrice * (1 - discount / 100));
             }
         });
-        
         document.getElementById('offerDiscount').addEventListener('input', (e) => {
             const productId = parseInt(document.getElementById('offerProductSelect').value);
             const product = products.find(p => p.id === productId);
@@ -2263,298 +2243,278 @@ table{width:100%;border-collapse:collapse;margin-bottom:20px}th{background:#FF67
     async saveOfferProduct() {
         const productId = parseInt(document.getElementById('offerProductSelect').value);
         const discount = parseFloat(document.getElementById('offerDiscount').value);
-        
         if (!productId || isNaN(discount) || discount < 1 || discount > 90) {
             this.toast.error('خطأ', 'بيانات غير صحيحة');
             return;
         }
-        
         const offers = await this.storage.get('offers', { title: '', startTime: '', endTime: '', products: [] });
         if (offers.products.find(op => op.productId === productId)) {
             this.toast.error('خطأ', 'هذا المنتج موجود بالفعل في العروض');
             return;
         }
-        
         offers.products.push({ productId, discount });
         await this.storage.set('offers', offers);
         this.modal.close();
         this.toast.success('تم', 'تم إضافة المنتج للعروض');
         await this.renderOffersTable();
     }
+    
     // ===== تبويب العروض =====
-showOffersTab(tab) {
-    const discountsContent = document.getElementById('offersDiscountsContent');
-    const contestsContent = document.getElementById('offersContestsContent');
-    const buttons = document.querySelectorAll('.offers-tabs .btn');
-    
-    if (tab === 'discounts') {
-        discountsContent.style.display = 'block';
-        contestsContent.style.display = 'none';
-        buttons[0].classList.add('active');
-        buttons[1].classList.remove('active');
-        this.renderOffersTable();
-    } else {
-        discountsContent.style.display = 'none';
-        contestsContent.style.display = 'block';
-        buttons[0].classList.remove('active');
-        buttons[1].classList.add('active');
-        this.renderContestsTable();
-    }
-}
-
-// ===== المسابقات =====
-async showAddContestModal() {
-    const body = `
-        <form id="contestForm">
-            <div class="form-group">
-                <label>اسم البكج/المسابقة *</label>
-                <input type="text" class="form-input" id="contestName" required>
-            </div>
-            <div class="form-group">
-                <label>صورة البكج</label>
-                <input type="file" id="contestImage" class="form-input" accept="image/*">
-                <div id="contestImagePreview" style="margin-top: 10px; display: none;">
-                    <img id="contestPreviewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px;">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>وصف البكج</label>
-                <textarea class="form-textarea" id="contestDescription"></textarea>
-            </div>
-            <div class="form-group">
-                <label>تاريخ الانتهاء</label>
-                <input type="date" class="form-input" id="contestExpiry">
-            </div>
-        </form>
-    `;
-    const footer = `
-        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
-        <button class="btn btn-primary" onclick="app.saveContest()">
-            <i class="fas fa-save"></i> حفظ
-        </button>
-    `;
-    this.modal.open('إضافة مسابقة/بكج جديد', body, footer);
-}
-
-async saveContest() {
-    const name = document.getElementById('contestName').value.trim();
-    const description = document.getElementById('contestDescription').value.trim();
-    const expiry = document.getElementById('contestExpiry').value;
-    
-    if (!name) {
-        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
-        return;
-    }
-    
-    let imageUrl = null;
-    const imageInput = document.getElementById('contestImage');
-    if (imageInput && imageInput.files && imageInput.files[0]) {
-        try {
-            imageUrl = await this.uploadImageToImgBB(imageInput.files[0]);
-        } catch (error) {
-            this.toast.error('خطأ', 'فشل رفع الصورة');
-            return;
+    showOffersTab(tab) {
+        const discountsContent = document.getElementById('offersDiscountsContent');
+        const contestsContent = document.getElementById('offersContestsContent');
+        const buttons = document.querySelectorAll('.offers-tabs .btn');
+        if (tab === 'discounts') {
+            discountsContent.style.display = 'block';
+            contestsContent.style.display = 'none';
+            buttons[0].classList.add('active');
+            buttons[1].classList.remove('active');
+            this.renderOffersTable();
+        } else {
+            discountsContent.style.display = 'none';
+            contestsContent.style.display = 'block';
+            buttons[0].classList.remove('active');
+            buttons[1].classList.add('active');
+            this.renderContestsTable();
         }
     }
     
-    const contests = await this.storage.get('contests', []);
-    const newContest = {
-        id: contests.length > 0 ? Math.max(...contests.map(c => c.id)) + 1 : 1,
-        name,
-        description,
-        image: imageUrl,
-        expiryDate: expiry,
-        bookings: [],
-        createdAt: new Date().toISOString()
-    };
-    
-    contests.push(newContest);
-    await this.storage.set('contests', contests);
-    
-    this.modal.close();
-    this.toast.success('تم', 'تم إضافة المسابقة بنجاح');
-    this.renderContestsTable();
-}
-
-async renderContestsTable() {
-    const contests = await this.storage.get('contests', []);
-    const tbody = document.getElementById('contestsTableBody');
-    if (!tbody) return;
-    
-    if (contests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-gift"></i><p>لا توجد مسابقات</p></div></td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = contests.map(contest => `
-        <tr>
-            <td><strong>${contest.name}</strong></td>
-            <td>${contest.image ? `<img src="${contest.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">` : '-'}</td>
-            <td>${contest.bookings ? contest.bookings.length : 0}</td>
-            <td><span class="status-badge ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'danger' : 'success'}">
-                ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'منتهي' : 'نشط'}
-            </span></td>
-            <td>
-                <div class="action-buttons">
-                    <button class="action-btn view" onclick="app.viewContestBookings(${contest.id})" title="عرض الحجوزات">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="action-btn edit" onclick="app.editContest(${contest.id})" title="تعديل">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn delete" onclick="app.deleteContest(${contest.id})" title="حذف">
-                        <i class="fas fa-trash"></i>
-                    </button>
+    // ===== المسابقات =====
+    async showAddContestModal() {
+        const body = `
+            <form id="contestForm">
+                <div class="form-group">
+                    <label>اسم البكج/المسابقة *</label>
+                    <input type="text" class="form-input" id="contestName" required>
                 </div>
-            </td>
-        </tr>
-    `).join('');
-}
-
-async viewContestBookings(contestId) {
-    const contests = await this.storage.get('contests', []);
-    const contest = contests.find(c => c.id === contestId);
-    if (!contest) return;
-    
-    const bookings = contest.bookings || [];
-    
-    let body = `
-        <div style="margin-bottom: 20px;">
-            <h3>${contest.name} - الحجوزات (${bookings.length})</h3>
-        </div>
-    `;
-    
-    if (bookings.length > 0) {
-        body += `
-            <button class="btn btn-primary mb-3" onclick="app.selectRandomWinner(${contestId})">
-                <i class="fas fa-random"></i> اختيار فائز عشوائي
-            </button>
-            <div class="table-responsive">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>الاسم</th>
-                            <th>رقم الهاتف</th>
-                            <th>تاريخ الحجز</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${bookings.map((booking, idx) => `
-                            <tr>
-                                <td>${idx + 1}</td>
-                                <td>${booking.name}</td>
-                                <td>${booking.phone}</td>
-                                <td>${this.formatDateTime(booking.date)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
+                <div class="form-group">
+                    <label>صورة البكج</label>
+                    <input type="file" id="contestImage" class="form-input" accept="image/*">
+                    <div id="contestImagePreview" style="margin-top: 10px; display: none;">
+                        <img id="contestPreviewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px;">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>وصف البكج</label>
+                    <textarea class="form-textarea" id="contestDescription"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>تاريخ الانتهاء</label>
+                    <input type="date" class="form-input" id="contestExpiry">
+                </div>
+            </form>
         `;
-    } else {
-        body += '<div class="empty-state"><i class="fas fa-users"></i><p>لا توجد حجوزات بعد</p></div>';
+        const footer = `
+            <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+            <button class="btn btn-primary" onclick="app.saveContest()">
+                <i class="fas fa-save"></i> حفظ
+            </button>
+        `;
+        this.modal.open('إضافة مسابقة/بكج جديد', body, footer);
     }
     
-    const footer = `
-        <button class="btn btn-outline" onclick="app.modal.close()">إغلاق</button>
-    `;
-    
-    this.modal.open('حجوزات المسابقة', body, footer);
-}
-
-async selectRandomWinner(contestId) {
-    const contests = await this.storage.get('contests', []);
-    const contest = contests.find(c => c.id === contestId);
-    if (!contest || !contest.bookings || contest.bookings.length === 0) {
-        this.toast.warning('تنبيه', 'لا توجد حجوزات لاختيار فائز');
-        return;
-    }
-    
-    const randomIndex = Math.floor(Math.random() * contest.bookings.length);
-    const winner = contest.bookings[randomIndex];
-    
-    this.modal.confirm('الفائز المختار', 
-        `🎉 الفائز هو: ${winner.name}\n📱 رقم الهاتف: ${winner.phone}`,
-        () => {}
-    );
-}
-
-async editContest(contestId) {
-    const contests = await this.storage.get('contests', []);
-    const contest = contests.find(c => c.id === contestId);
-    if (!contest) return;
-    
-    const body = `
-        <form id="editContestForm">
-            <div class="form-group">
-                <label>اسم البكج/المسابقة *</label>
-                <input type="text" class="form-input" id="editContestName" value="${contest.name}" required>
-            </div>
-            <div class="form-group">
-                <label>وصف البكج</label>
-                <textarea class="form-textarea" id="editContestDescription">${contest.description || ''}</textarea>
-            </div>
-            <div class="form-group">
-                <label>تاريخ الانتهاء</label>
-                <input type="date" class="form-input" id="editContestExpiry" value="${contest.expiryDate || ''}">
-            </div>
-        </form>
-    `;
-    const footer = `
-        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
-        <button class="btn btn-primary" onclick="app.updateContest(${contestId})">
-            <i class="fas fa-save"></i> تحديث
-        </button>
-    `;
-    this.modal.open('تعديل المسابقة', body, footer);
-}
-
-async updateContest(contestId) {
-    const name = document.getElementById('editContestName').value.trim();
-    const description = document.getElementById('editContestDescription').value.trim();
-    const expiry = document.getElementById('editContestExpiry').value;
-    
-    if (!name) {
-        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
-        return;
-    }
-    
-    const contests = await this.storage.get('contests', []);
-    const index = contests.findIndex(c => c.id === contestId);
-    if (index !== -1) {
-        contests[index] = {
-            ...contests[index],
+    async saveContest() {
+        const name = document.getElementById('contestName').value.trim();
+        const description = document.getElementById('contestDescription').value.trim();
+        const expiry = document.getElementById('contestExpiry').value;
+        if (!name) {
+            this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+            return;
+        }
+        let imageUrl = null;
+        const imageInput = document.getElementById('contestImage');
+        if (imageInput && imageInput.files && imageInput.files[0]) {
+            try {
+                imageUrl = await this.uploadImageToImgBB(imageInput.files[0]);
+            } catch (error) {
+                this.toast.error('خطأ', 'فشل رفع الصورة');
+                return;
+            }
+        }
+        const contests = await this.storage.get('contests', []);
+        const newContest = {
+            id: contests.length > 0 ? Math.max(...contests.map(c => c.id)) + 1 : 1,
             name,
             description,
+            image: imageUrl,
             expiryDate: expiry,
-            updatedAt: new Date().toISOString()
+            bookings: [],
+            createdAt: new Date().toISOString()
         };
+        contests.push(newContest);
         await this.storage.set('contests', contests);
         this.modal.close();
-        this.toast.success('تم', 'تم تحديث المسابقة');
+        this.toast.success('تم', 'تم إضافة المسابقة بنجاح');
         this.renderContestsTable();
     }
-}
-
-async deleteContest(contestId) {
-    this.modal.confirm('حذف المسابقة', 'هل أنت متأكد من حذف هذه المسابقة؟', async () => {
-        let contests = await this.storage.get('contests', []);
-        contests = contests.filter(c => c.id !== contestId);
-        await this.storage.set('contests', contests);
-        this.toast.success('تم', 'تم حذف المسابقة');
-        this.renderContestsTable();
-    });
-}
+    
+    async renderContestsTable() {
+        const contests = await this.storage.get('contests', []);
+        const tbody = document.getElementById('contestsTableBody');
+        if (!tbody) return;
+        if (contests.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-gift"></i><p>لا توجد مسابقات</p></div></td></tr>';
+            return;
+        }
+        tbody.innerHTML = contests.map(contest => `
+            <tr>
+                <td><strong>${contest.name}</strong></td>
+                <td>${contest.image ? `<img src="${contest.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">` : '-'}</td>
+                <td>${contest.bookings ? contest.bookings.length : 0}</td>
+                <td><span class="status-badge ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'danger' : 'success'}">
+                    ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'منتهي' : 'نشط'}
+                </span></td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="action-btn view" onclick="app.viewContestBookings(${contest.id})" title="عرض الحجوزات">
+                            <i class="fas fa-eye"></i>
+                        </button>
+                        <button class="action-btn edit" onclick="app.editContest(${contest.id})" title="تعديل">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button class="action-btn delete" onclick="app.deleteContest(${contest.id})" title="حذف">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+        `).join('');
+    }
+    
+    async viewContestBookings(contestId) {
+        const contests = await this.storage.get('contests', []);
+        const contest = contests.find(c => c.id === contestId);
+        if (!contest) return;
+        const bookings = contest.bookings || [];
+        let body = `
+            <div style="margin-bottom: 20px;">
+                <h3>${contest.name} - الحجوزات (${bookings.length})</h3>
+            </div>
+        `;
+        if (bookings.length > 0) {
+            body += `
+                <button class="btn btn-primary mb-3" onclick="app.selectRandomWinner(${contestId})">
+                    <i class="fas fa-random"></i> اختيار فائز عشوائي
+                </button>
+                <div class="table-responsive">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>الاسم</th>
+                                <th>رقم الهاتف</th>
+                                <th>تاريخ الحجز</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${bookings.map((booking, idx) => `
+                                <tr>
+                                    <td>${idx + 1}</td>
+                                    <td>${booking.name}</td>
+                                    <td>${booking.phone}</td>
+                                    <td>${this.formatDateTime(booking.date)}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+        } else {
+            body += '<div class="empty-state"><i class="fas fa-users"></i><p>لا توجد حجوزات بعد</p></div>';
+        }
+        const footer = `
+            <button class="btn btn-outline" onclick="app.modal.close()">إغلاق</button>
+        `;
+        this.modal.open('حجوزات المسابقة', body, footer);
+    }
+    
+    async selectRandomWinner(contestId) {
+        const contests = await this.storage.get('contests', []);
+        const contest = contests.find(c => c.id === contestId);
+        if (!contest || !contest.bookings || contest.bookings.length === 0) {
+            this.toast.warning('تنبيه', 'لا توجد حجوزات لاختيار فائز');
+            return;
+        }
+        const randomIndex = Math.floor(Math.random() * contest.bookings.length);
+        const winner = contest.bookings[randomIndex];
+        this.modal.confirm('الفائز المختار',
+            `🎉 الفائز هو: ${winner.name}
+            📱 رقم الهاتف: ${winner.phone}`,
+            () => {}
+        );
+    }
+    
+    async editContest(contestId) {
+        const contests = await this.storage.get('contests', []);
+        const contest = contests.find(c => c.id === contestId);
+        if (!contest) return;
+        const body = `
+            <form id="editContestForm">
+                <div class="form-group">
+                    <label>اسم البكج/المسابقة *</label>
+                    <input type="text" class="form-input" id="editContestName" value="${contest.name}" required>
+                </div>
+                <div class="form-group">
+                    <label>وصف البكج</label>
+                    <textarea class="form-textarea" id="editContestDescription">${contest.description || ''}</textarea>
+                </div>
+                <div class="form-group">
+                    <label>تاريخ الانتهاء</label>
+                    <input type="date" class="form-input" id="editContestExpiry" value="${contest.expiryDate || ''}">
+                </div>
+            </form>
+        `;
+        const footer = `
+            <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+            <button class="btn btn-primary" onclick="app.updateContest(${contestId})">
+                <i class="fas fa-save"></i> تحديث
+            </button>
+        `;
+        this.modal.open('تعديل المسابقة', body, footer);
+    }
+    
+    async updateContest(contestId) {
+        const name = document.getElementById('editContestName').value.trim();
+        const description = document.getElementById('editContestDescription').value.trim();
+        const expiry = document.getElementById('editContestExpiry').value;
+        if (!name) {
+            this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+            return;
+        }
+        const contests = await this.storage.get('contests', []);
+        const index = contests.findIndex(c => c.id === contestId);
+        if (index !== -1) {
+            contests[index] = {
+                ...contests[index],
+                name,
+                description,
+                expiryDate: expiry,
+                updatedAt: new Date().toISOString()
+            };
+            await this.storage.set('contests', contests);
+            this.modal.close();
+            this.toast.success('تم', 'تم تحديث المسابقة');
+            this.renderContestsTable();
+        }
+    }
+    
+    async deleteContest(contestId) {
+        this.modal.confirm('حذف المسابقة', 'هل أنت متأكد من حذف هذه المسابقة؟', async () => {
+            let contests = await this.storage.get('contests', []);
+            contests = contests.filter(c => c.id !== contestId);
+            await this.storage.set('contests', contests);
+            this.toast.success('تم', 'تم حذف المسابقة');
+            this.renderContestsTable();
+        });
+    }
+    
     async editOfferProduct(productId) {
         const offers = await this.storage.get('offers', { products: [] });
         const offer = offers.products.find(op => op.productId === productId);
         if (!offer) return;
-        
         const products = await this.storage.get('products', []);
         const product = products.find(p => p.id === productId);
         if (!product) return;
-        
         const body = `
             <div style="background:#f8f9fa;padding:15px;border-radius:8px;margin-bottom:20px">
                 <h4>${product.name}</h4>
@@ -2576,7 +2536,6 @@ async deleteContest(contestId) {
             <button class="btn btn-primary" onclick="app.updateOfferProduct(${productId})"><i class="fas fa-save"></i> حفظ</button>
         `;
         this.modal.open('تعديل خصم العرض', body, footer);
-        
         document.getElementById('editOfferDiscount').addEventListener('input', (e) => {
             const discount = parseFloat(e.target.value) || 0;
             document.getElementById('editOfferFinalPrice').textContent = this.formatCurrency(product.salePrice * (1 - discount / 100));
@@ -2589,7 +2548,6 @@ async deleteContest(contestId) {
             this.toast.error('خطأ', 'نسبة الخصم غير صحيحة');
             return;
         }
-        
         const offers = await this.storage.get('offers', { products: [] });
         const offer = offers.products.find(op => op.productId === productId);
         if (offer) {
@@ -2638,14 +2596,11 @@ async deleteContest(contestId) {
         const chats = await this.storage.get('chats', []);
         const chat = chats.find(c => c.id === chatId);
         if (!chat) return;
-        
         this.currentChatId = chatId;
-        
         document.getElementById('chatUserName').textContent = chat.customerName;
         document.getElementById('chatUserStatus').textContent = 'متصل الآن';
         document.getElementById('chatUserAvatar').textContent = chat.customerName.charAt(0);
         document.getElementById('chatInputArea').style.display = 'flex';
-        
         const messagesContainer = document.getElementById('chatMessages');
         messagesContainer.innerHTML = chat.messages.map(msg => `
             <div class="chat-message ${msg.from}">
@@ -2653,16 +2608,13 @@ async deleteContest(contestId) {
                 <span class="time">${this.formatTime(msg.time)}</span>
             </div>
         `).join('');
-        
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
-        
         if (chat.unread > 0) {
             chat.unread = 0;
             await this.storage.set('chats', chats);
             await this.renderChatList();
             await this.updateChatBadge();
         }
-        
         document.querySelectorAll('.chat-list-item').forEach(item => item.classList.remove('active'));
         const activeItem = document.querySelector(`.chat-list-item[onclick="app.openChat(${chatId})"]`);
         if (activeItem) activeItem.classList.add('active');
@@ -2673,11 +2625,9 @@ async deleteContest(contestId) {
         const input = document.getElementById('chatReplyInput');
         const text = input.value.trim();
         if (!text) return;
-        
         const chats = await this.storage.get('chats', []);
         const chat = chats.find(c => c.id === this.currentChatId);
         if (!chat) return;
-        
         chat.messages.push({
             from: 'admin',
             text: text,
@@ -2685,10 +2635,8 @@ async deleteContest(contestId) {
         });
         chat.lastMessage = text;
         chat.updatedAt = new Date().toISOString();
-        
         await this.storage.set('chats', chats);
         input.value = '';
-        
         await this.openChat(this.currentChatId);
         await this.renderChatList();
         this.toast.success('تم', 'تم إرسال الرد');
@@ -2700,7 +2648,6 @@ async deleteContest(contestId) {
         const sales = (await this.storage.get('sales', [])).filter(s => s.status !== 'cancelled');
         const now = new Date();
         let filteredSales = sales;
-        
         if (period === 'today') {
             const today = now.toDateString();
             filteredSales = sales.filter(s => new Date(s.date).toDateString() === today);
@@ -2714,7 +2661,6 @@ async deleteContest(contestId) {
             const yearStart = new Date(now.getFullYear(), 0, 1);
             filteredSales = sales.filter(s => new Date(s.date) >= yearStart);
         }
-        
         const totalSales = filteredSales.length;
         const totalRevenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
         const totalPaid = filteredSales.reduce((sum, s) => sum + (s.paid || s.total), 0);
@@ -2727,7 +2673,6 @@ async deleteContest(contestId) {
                 return itemSum + (item.total - cost);
             }, 0);
         }, 0);
-        
         const container = document.getElementById('salesReportContent');
         container.innerHTML = `
             <div class="report-summary">
@@ -2760,7 +2705,6 @@ async deleteContest(contestId) {
         const sales = (await this.storage.get('sales', [])).filter(s => s.status !== 'cancelled');
         const now = new Date();
         let filteredSales = sales;
-        
         if (period === 'today') {
             const today = now.toDateString();
             filteredSales = sales.filter(s => new Date(s.date).toDateString() === today);
@@ -2774,21 +2718,19 @@ async deleteContest(contestId) {
             const yearStart = new Date(now.getFullYear(), 0, 1);
             filteredSales = sales.filter(s => new Date(s.date) >= yearStart);
         }
-        
         const totalRevenue = filteredSales.reduce((sum, s) => sum + s.total, 0);
         const settings = await this.storage.get('settings', {});
-        
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         printWindow.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>تقرير المبيعات</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}
-.header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}.header h1{color:#FF6700;font-size:28px}.header p{color:#6c757d;margin-top:5px}
-.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:25px}.summary-item{background:#f8f9fa;padding:15px;border-radius:8px;text-align:center}.summary-item h4{font-size:12px;color:#6c757d;margin-bottom:5px}.summary-item .value{font-size:20px;font-weight:800;color:#FF6700}
-table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padding:10px;text-align:right}td{padding:10px;border-bottom:1px solid #dee2e6}
-.footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px}</style></head>
-<body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>تقرير المبيعات - ${periodNames[period]}</p><p>تاريخ التقرير: ${this.formatDateTime(new Date().toISOString())}</p></div>
-<div class="summary"><div class="summary-item"><h4>عدد الفواتير</h4><div class="value">${filteredSales.length}</div></div><div class="summary-item"><h4>إجمالي المبيعات</h4><div class="value">${this.formatCurrency(totalRevenue)}</div></div><div class="summary-item"><h4>صافي الربح</h4><div class="value">${this.formatCurrency(totalRevenue * 0.2)}</div></div></div>
-<table><thead><tr><th>#</th><th>رقم الفاتورة</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody>${filteredSales.map((s, i) => `<tr><td>${i + 1}</td><td>${s.invoiceNumber}</td><td>${this.formatDateTime(s.date)}</td><td>${s.customerName}</td><td>${this.formatCurrency(s.total)}</td></tr>`).join('')}</tbody></table>
-<div class="footer"><p>${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+            <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}
+            .header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}.header h1{color:#FF6700;font-size:28px}.header p{color:#6c757d;margin-top:5px}
+            .summary{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:25px}.summary-item{background:#f8f9fa;padding:15px;border-radius:8px;text-align:center}.summary-item h4{font-size:12px;color:#6c757d;margin-bottom:5px}.summary-item .value{font-size:20px;font-weight:800;color:#FF6700}
+            table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padding:10px;text-align:right}td{padding:10px;border-bottom:1px solid #dee2e6}
+            .footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px}</style></head>
+            <body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>تقرير المبيعات - ${periodNames[period]}</p><p>تاريخ التقرير: ${this.formatDateTime(new Date().toISOString())}</p></div>
+            <div class="summary"><div class="summary-item"><h4>عدد الفواتير</h4><div class="value">${filteredSales.length}</div></div><div class="summary-item"><h4>إجمالي المبيعات</h4><div class="value">${this.formatCurrency(totalRevenue)}</div></div><div class="summary-item"><h4>صافي الربح</h4><div class="value">${this.formatCurrency(totalRevenue * 0.2)}</div></div></div>
+            <table><thead><tr><th>#</th><th>رقم الفاتورة</th><th>التاريخ</th><th>العميل</th><th>الإجمالي</th></tr></thead><tbody>${filteredSales.map((s, i) => `<tr><td>${i + 1}</td><td>${s.invoiceNumber}</td><td>${this.formatDateTime(s.date)}</td><td>${s.customerName}</td><td>${this.formatCurrency(s.total)}</td></tr>`).join('')}</tbody></table>
+            <div class="footer"><p>${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
         printWindow.document.close();
     }
     
@@ -2864,12 +2806,12 @@ table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padd
         const settings = await this.storage.get('settings', {});
         const printWindow = window.open('', '_blank', 'width=600,height=400');
         printWindow.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>باركود</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;padding:20px}
-.barcode-label{border:2px solid #000;padding:15px;margin-bottom:15px;text-align:center;page-break-inside:avoid}
-.store-name{font-size:14px;font-weight:bold;margin-bottom:8px}.product-name{font-size:12px;margin-bottom:8px}
-.barcode{font-size:40px;letter-spacing:2px;margin:10px 0}.barcode-text{font-size:14px;font-weight:bold}.price{font-size:16px;font-weight:bold;margin-top:8px;color:#FF6700}</style></head>
-<body>${Array(copies).fill(`<div class="barcode-label"><div class="store-name">${settings.storeName || 'Mi Store'}</div><div class="product-name">${product.name}</div><div class="barcode">*${product.code}*</div><div class="barcode-text">${product.code}</div><div class="price">${this.formatCurrency(product.salePrice)}</div></div>`).join('')}
-<script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+            <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Courier New',monospace;padding:20px}
+            .barcode-label{border:2px solid #000;padding:15px;margin-bottom:15px;text-align:center;page-break-inside:avoid}
+            .store-name{font-size:14px;font-weight:bold;margin-bottom:8px}.product-name{font-size:12px;margin-bottom:8px}
+            .barcode{font-size:40px;letter-spacing:2px;margin:10px 0}.barcode-text{font-size:14px;font-weight:bold}.price{font-size:16px;font-weight:bold;margin-top:8px;color:#FF6700}</style></head>
+            <body>${Array(copies).fill(`<div class="barcode-label"><div class="store-name">${settings.storeName || 'Mi Store'}</div><div class="product-name">${product.name}</div><div class="barcode">*${product.code}*</div><div class="barcode-text">${product.code}</div><div class="price">${this.formatCurrency(product.salePrice)}</div></div>`).join('')}
+            <script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
         printWindow.document.close();
         this.modal.close();
     }
@@ -2897,7 +2839,6 @@ table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padd
         const type = document.getElementById('reportType').value;
         const settings = await this.storage.get('settings', {});
         let content = '', title = '';
-        
         if (type === 'sales') {
             title = 'تقرير المبيعات';
             const sales = await this.storage.get('sales', []);
@@ -2919,11 +2860,10 @@ table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padd
             const customers = await this.storage.get('customers', []);
             content = `<table><thead><tr><th>الكود</th><th>الاسم</th><th>الهاتف</th><th>العنوان</th><th>الرصيد</th></tr></thead><tbody>${customers.map(c => `<tr><td>${c.code}</td><td>${c.name}</td><td>${c.phone}</td><td>${c.address || '-'}</td><td>${this.formatCurrency(c.balance)}</td></tr>`).join('')}</tbody></table>`;
         }
-        
         const printWindow = window.open('', '_blank', 'width=800,height=600');
         printWindow.document.write(`<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="UTF-8"><title>${title}</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}.header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}.header h1{color:#FF6700;font-size:28px}.header p{color:#6c757d;margin-top:5px}table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padding:10px;text-align:right}td{padding:10px;border-bottom:1px solid #dee2e6}.footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px}</style></head>
-<body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>${title}</p><p>تاريخ التقرير: ${this.formatDateTime(new Date().toISOString())}</p></div>${content}<div class="footer"><p>${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
+            <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',Tahoma,Arial;padding:20px}.header{text-align:center;border-bottom:3px solid #FF6700;padding-bottom:15px;margin-bottom:20px}.header h1{color:#FF6700;font-size:28px}.header p{color:#6c757d;margin-top:5px}table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padding:10px;text-align:right}td{padding:10px;border-bottom:1px solid #dee2e6}.footer{margin-top:40px;text-align:center;color:#6c757d;font-size:12px}</style></head>
+            <body><div class="header"><h1>${settings.storeName || 'Mi Store'}</h1><p>${title}</p><p>تاريخ التقرير: ${this.formatDateTime(new Date().toISOString())}</p></div>${content}<div class="footer"><p>${settings.storeName || 'Mi Store'}</p></div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`);
         printWindow.document.close();
         this.modal.close();
     }
@@ -3025,263 +2965,659 @@ table{width:100%;border-collapse:collapse}th{background:#FF6700;color:white;padd
         console.log(`منتجات بصور: ${withImage}`);
         console.log(`منتجات بدون صور: ${withoutImage}`);
     }
-// ===== تبويب العروض =====
-showOffersTab(tab) {
-    const discountsContent = document.getElementById('offersDiscountsContent');
-    const contestsContent = document.getElementById('offersContestsContent');
-    const buttons = document.querySelectorAll('.offers-tabs .btn');
-    
-    if (tab === 'discounts') {
-        discountsContent.style.display = 'block';
-        contestsContent.style.display = 'none';
-        buttons[0].classList.add('active');
-        buttons[1].classList.remove('active');
-        this.renderOffersTable();
-    } else {
-        discountsContent.style.display = 'none';
-        contestsContent.style.display = 'block';
-        buttons[0].classList.remove('active');
-        buttons[1].classList.add('active');
-        this.renderContestsTable();
-    }
-}
-
-// ===== المسابقات =====
-async showAddContestModal() {
-    const body = `
-        <form id="contestForm">
-            <div class="form-group">
-                <label>اسم البكج/المسابقة *</label>
-                <input type="text" class="form-input" id="contestName" required>
-            </div>
-            <div class="form-group">
-                <label>صورة البكج</label>
-                <input type="file" id="contestImage" class="form-input" accept="image/*">
-                <div id="contestImagePreview" style="margin-top: 10px; display: none;">
-                    <img id="contestPreviewImg" src="" alt="معاينة" style="max-width: 200px; border-radius: 8px;">
-                </div>
-            </div>
-            <div class="form-group">
-                <label>وصف البكج</label>
-                <textarea class="form-textarea" id="contestDescription"></textarea>
-            </div>
-            <div class="form-group">
-                <label>تاريخ الانتهاء</label>
-                <input type="date" class="form-input" id="contestExpiry">
-            </div>
-        </form>
-    `;
-    const footer = `
-        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
-        <button class="btn btn-primary" onclick="app.saveContest()">
-            <i class="fas fa-save"></i> حفظ
-        </button>
-    `;
-    this.modal.open('إضافة مسابقة/بكج جديد', body, footer);
-}
-
-async saveContest() {
-    const name = document.getElementById('contestName').value.trim();
-    const description = document.getElementById('contestDescription').value.trim();
-    const expiry = document.getElementById('contestExpiry').value;
-    
-    if (!name) {
-        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
-        return;
-    }
-    
-    let imageUrl = null;
-    const imageInput = document.getElementById('contestImage');
-    if (imageInput && imageInput.files && imageInput.files[0]) {
-        try {
-            imageUrl = await this.uploadImageToImgBB(imageInput.files[0]);
-        } catch (error) {
-            this.toast.error('خطأ', 'فشل رفع الصورة');
-            return;
-        }
-    }
-    
-    const contests = await this.storage.get('contests', []);
-    const newContest = {
-        id: contests.length > 0 ? Math.max(...contests.map(c => c.id)) + 1 : 1,
-        name,
-        description,
-        image: imageUrl,
-        expiryDate: expiry,
-        bookings: [],
-        createdAt: new Date().toISOString()
-    };
-    
-    contests.push(newContest);
-    await this.storage.set('contests', contests);
-    
-    this.modal.close();
-    this.toast.success('تم', 'تم إضافة المسابقة بنجاح');
-    this.renderContestsTable();
-}
-
-async renderContestsTable() {
-    const contests = await this.storage.get('contests', []);
-    const tbody = document.getElementById('contestsTableBody');
+    // ===== الملاحظات =====
+async renderNotesTable() {
+    const notes = await this.storage.get('notes', []);
+    const tbody = document.getElementById('notesTableBody');
     if (!tbody) return;
     
-    if (contests.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-gift"></i><p>لا توجد مسابقات</p></div></td></tr>';
+    if (notes.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5"><div class="empty-state"><i class="fas fa-sticky-note"></i><p>لا توجد ملاحظات</p></div></td></tr>';
         return;
     }
     
-    tbody.innerHTML = contests.map(contest => `
+    tbody.innerHTML = notes.slice().reverse().map(note => `
         <tr>
-            <td><strong>${contest.name}</strong></td>
-            <td>${contest.image ? `<img src="${contest.image}" style="width: 50px; height: 50px; object-fit: cover; border-radius: 8px;">` : '-'}</td>
-            <td>${contest.bookings ? contest.bookings.length : 0}</td>
-            <td><span class="status-badge ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'danger' : 'success'}">
-                ${contest.expiryDate && new Date(contest.expiryDate) < new Date() ? 'منتهي' : 'نشط'}
-            </span></td>
+            <td><strong>${note.title}</strong></td>
+            <td>${note.content.substring(0, 50)}${note.content.length > 50 ? '...' : ''}</td>
+            <td>${this.formatDate(note.createdAt)}</td>
+            <td>${this.formatTime(note.createdAt)}</td>
             <td>
                 <div class="action-buttons">
-                    <button class="action-btn view" onclick="app.viewContestBookings(${contest.id})" title="عرض الحجوزات">
-                        <i class="fas fa-eye"></i>
-                    </button>
-                    <button class="action-btn edit" onclick="app.editContest(${contest.id})" title="تعديل">
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button class="action-btn delete" onclick="app.deleteContest(${contest.id})" title="حذف">
-                        <i class="fas fa-trash"></i>
-                    </button>
+                    <button class="action-btn view" onclick="app.viewNote(${note.id})"><i class="fas fa-eye"></i></button>
+                    <button class="action-btn edit" onclick="app.editNote(${note.id})"><i class="fas fa-edit"></i></button>
+                    <button class="action-btn delete" onclick="app.deleteNote(${note.id})"><i class="fas fa-trash"></i></button>
                 </div>
             </td>
         </tr>
     `).join('');
 }
 
-async viewContestBookings(contestId) {
-    const contests = await this.storage.get('contests', []);
-    const contest = contests.find(c => c.id === contestId);
-    if (!contest) return;
-    
-    const bookings = contest.bookings || [];
-    
-    let body = `<div style="margin-bottom: 20px;"><h3>${contest.name} - الحجوزات (${bookings.length})</h3></div>`;
-    
-    if (bookings.length > 0) {
-        body += `
-            <button class="btn btn-primary mb-3" onclick="app.selectRandomWinner(${contestId})">
-                <i class="fas fa-random"></i> اختيار فائز عشوائي
-            </button>
-            <div class="table-responsive">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>#</th>
-                            <th>الاسم</th>
-                            <th>رقم الهاتف</th>
-                            <th>تاريخ الحجز</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${bookings.map((booking, idx) => `
-                            <tr>
-                                <td>${idx + 1}</td>
-                                <td>${booking.name}</td>
-                                <td>${booking.phone}</td>
-                                <td>${this.formatDateTime(booking.date)}</td>
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
-            </div>
-        `;
-    } else {
-        body += '<div class="empty-state"><i class="fas fa-users"></i><p>لا توجد حجوزات بعد</p></div>';
-    }
-    
-    const footer = `<button class="btn btn-outline" onclick="app.modal.close()">إغلاق</button>`;
-    this.modal.open('حجوزات المسابقة', body, footer);
+showAddNoteModal() {
+    this.openNoteModal();
 }
 
-async selectRandomWinner(contestId) {
-    const contests = await this.storage.get('contests', []);
-    const contest = contests.find(c => c.id === contestId);
-    if (!contest || !contest.bookings || contest.bookings.length === 0) {
-        this.toast.warning('تنبيه', 'لا توجد حجوزات لاختيار فائز');
-        return;
-    }
-    
-    const randomIndex = Math.floor(Math.random() * contest.bookings.length);
-    const winner = contest.bookings[randomIndex];
-    
-    this.modal.confirm('🎉 الفائز المختار', 
-        `الفائز هو: ${winner.name}\n📱 رقم الهاتف: ${winner.phone}`,
-        () => {}
-    );
-}
-
-async editContest(contestId) {
-    const contests = await this.storage.get('contests', []);
-    const contest = contests.find(c => c.id === contestId);
-    if (!contest) return;
-    
+openNoteModal(note = null) {
+    const isEdit = !!note;
     const body = `
-        <form id="editContestForm">
+        <form id="noteForm">
             <div class="form-group">
-                <label>اسم البكج/المسابقة *</label>
-                <input type="text" class="form-input" id="editContestName" value="${contest.name}" required>
+                <label>العنوان *</label>
+                <input type="text" class="form-input" id="noteTitle" value="${note?.title || ''}" required>
             </div>
             <div class="form-group">
-                <label>وصف البكج</label>
-                <textarea class="form-textarea" id="editContestDescription">${contest.description || ''}</textarea>
+                <label>المحتوى *</label>
+                <textarea class="form-textarea" id="noteContent" rows="6" required>${note?.content || ''}</textarea>
             </div>
             <div class="form-group">
-                <label>تاريخ الانتهاء</label>
-                <input type="date" class="form-input" id="editContestExpiry" value="${contest.expiryDate || ''}">
+                <label>التصنيف</label>
+                <select class="form-select" id="noteCategory">
+                    <option value="general">عام</option>
+                    <option value="important">مهم</option>
+                    <option value="urgent">عاجل</option>
+                    <option value="idea">فكرة</option>
+                </select>
             </div>
         </form>
     `;
+    
     const footer = `
         <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
-        <button class="btn btn-primary" onclick="app.updateContest(${contestId})">
-            <i class="fas fa-save"></i> تحديث
+        <button class="btn btn-primary" onclick="app.saveNote(${note?.id || 'null'})">
+            <i class="fas fa-save"></i> ${isEdit ? 'تحديث' : 'حفظ'}
         </button>
     `;
-    this.modal.open('تعديل المسابقة', body, footer);
+    
+    this.modal.open(isEdit ? 'تعديل الملاحظة' : 'إضافة ملاحظة جديدة', body, footer);
 }
 
-async updateContest(contestId) {
-    const name = document.getElementById('editContestName').value.trim();
-    const description = document.getElementById('editContestDescription').value.trim();
-    const expiry = document.getElementById('editContestExpiry').value;
+async saveNote(id) {
+    const title = document.getElementById('noteTitle').value.trim();
+    const content = document.getElementById('noteContent').value.trim();
+    const category = document.getElementById('noteCategory').value;
     
-    if (!name) {
-        this.toast.error('خطأ', 'يرجى إدخال اسم البكج');
+    if (!title || !content) {
+        this.toast.error('خطأ', 'يرجى ملء جميع الحقول');
         return;
     }
     
-    const contests = await this.storage.get('contests', []);
-    const index = contests.findIndex(c => c.id === contestId);
-    if (index !== -1) {
-        contests[index] = {
-            ...contests[index],
-            name,
-            description,
-            expiryDate: expiry,
-            updatedAt: new Date().toISOString()
+    const notes = await this.storage.get('notes', []);
+    
+    if (id) {
+        const index = notes.findIndex(n => n.id === id);
+        if (index !== -1) {
+            notes[index] = { ...notes[index], title, content, category, updatedAt: new Date().toISOString() };
+            await this.storage.set('notes', notes);
+            this.toast.success('تم', 'تم تحديث الملاحظة');
+        }
+    } else {
+        const newId = notes.length > 0 ? Math.max(...notes.map(n => n.id)) + 1 : 1;
+        notes.push({
+            id: newId,
+            title,
+            content,
+            category,
+            createdAt: new Date().toISOString()
+        });
+        await this.storage.set('notes', notes);
+        this.toast.success('تم', 'تم إضافة الملاحظة');
+    }
+    
+    this.modal.close();
+    await this.renderNotesTable();
+}
+
+async viewNote(id) {
+    const notes = await this.storage.get('notes', []);
+    const note = notes.find(n => n.id === id);
+    if (!note) return;
+    
+    const categoryNames = {
+        general: 'عام',
+        important: 'مهم',
+        urgent: 'عاجل',
+        idea: 'فكرة'
+    };
+    
+    const body = `
+        <div style="margin-bottom: 20px;">
+            <h2 style="margin-bottom: 10px;">${note.title}</h2>
+            <div style="display: flex; gap: 15px; margin-bottom: 15px; color: var(--text-muted); font-size: 13px;">
+                <span><i class="fas fa-calendar"></i> ${this.formatDate(note.createdAt)}</span>
+                <span><i class="fas fa-clock"></i> ${this.formatTime(note.createdAt)}</span>
+                <span><i class="fas fa-tag"></i> ${categoryNames[note.category] || 'عام'}</span>
+            </div>
+            <div style="background: var(--bg-input); padding: 20px; border-radius: 8px; line-height: 1.8;">
+                ${note.content.replace(/\n/g, '<br>')}
+            </div>
+        </div>
+    `;
+    
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إغلاق</button>
+        <button class="btn btn-primary" onclick="app.editNote(${note.id})">
+            <i class="fas fa-edit"></i> تعديل
+        </button>
+    `;
+    
+    this.modal.open('تفاصيل الملاحظة', body, footer);
+}
+
+async editNote(id) {
+    const notes = await this.storage.get('notes', []);
+    const note = notes.find(n => n.id === id);
+    if (note) this.openNoteModal(note);
+}
+
+async deleteNote(id) {
+    this.modal.confirm('حذف الملاحظة', 'هل أنت متأكد؟', async () => {
+        let notes = await this.storage.get('notes', []);
+        notes = notes.filter(n => n.id !== id);
+        await this.storage.set('notes', notes);
+        this.toast.success('تم', 'تم حذف الملاحظة');
+        await this.renderNotesTable();
+    });
+}
+// ===== النسخ الاحتياطي =====
+async exportBackupQR() {
+    // ✅ التحقق من تحميل المكتبة أولاً
+    if (typeof QRCode === 'undefined') {
+        this.toast.warning('تنبيه', 'جاري تحميل مكتبة الباركود... حاول مرة أخرى بعد ثانية');
+        // تحميل المكتبة ديناميكياً
+        await this.loadQRCodeLibrary();
+        if (typeof QRCode === 'undefined') {
+            this.toast.error('خطأ', 'فشل تحميل مكتبة الباركود. تحقق من اتصالك بالإنترنت');
+            return;
+        }
+    }
+
+    const products = await this.storage.get('products', []);
+    
+    if (products.length === 0) {
+        this.toast.warning('تنبيه', 'لا توجد منتجات للنسخ الاحتياطي');
+        return;
+    }
+    
+    this.toast.info('جاري', 'جاري إنشاء الباركود...');
+    
+    // تحويل البيانات إلى JSON
+    const backupData = {
+        version: '1.0',
+        date: new Date().toISOString(),
+        products: products
+    };
+    
+    const jsonString = JSON.stringify(backupData);
+    
+    // تقسيم البيانات إذا كانت كبيرة (QR code له حد أقصى ~2953 حرف)
+    const chunkSize = 2500;
+    const chunks = [];
+    for (let i = 0; i < jsonString.length; i += chunkSize) {
+        chunks.push(jsonString.substring(i, i + chunkSize));
+    }
+    
+    const container = document.getElementById('backupQRContainer');
+    container.innerHTML = '';
+    
+    try {
+        if (chunks.length === 1) {
+            // باركود واحد
+            const canvas = document.createElement('canvas');
+            await QRCode.toCanvas(canvas, jsonString, {
+                width: 400,
+                margin: 2,
+                color: {
+                    dark: '#000000',
+                    light: '#ffffff'
+                }
+            });
+            
+            container.innerHTML = `
+                <div style="margin-bottom: 15px;">
+                    <p style="color: var(--success); font-weight: 600;">
+                        ✅ تم إنشاء النسخة الاحتياطية (${products.length} منتج)
+                    </p>
+                    <p style="color: var(--text-muted); font-size: 13px;">
+                        التاريخ: ${this.formatDateTime(backupData.date)}
+                    </p>
+                </div>
+            `;
+            container.appendChild(canvas);
+            
+            // زر التحميل
+            const downloadBtn = document.createElement('button');
+            downloadBtn.className = 'btn btn-primary';
+            downloadBtn.innerHTML = '<i class="fas fa-download"></i> تحميل الصورة';
+            downloadBtn.style.marginTop = '15px';
+            downloadBtn.onclick = () => {
+                const link = document.createElement('a');
+                link.download = `backup_${new Date().toISOString().split('T')[0]}.png`;
+                link.href = canvas.toDataURL();
+                link.click();
+            };
+            container.appendChild(downloadBtn);
+            
+            // زر النسخ الاحتياطي كملف JSON (بديل آمن)
+            const jsonBtn = document.createElement('button');
+            jsonBtn.className = 'btn btn-success';
+            jsonBtn.innerHTML = '<i class="fas fa-file-code"></i> تحميل كملف JSON (مُوصى به)';
+            jsonBtn.style.marginTop = '10px';
+            jsonBtn.style.marginRight = '10px';
+            jsonBtn.onclick = () => {
+                const blob = new Blob([jsonString], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                this.toast.success('تم', 'تم تحميل ملف النسخة الاحتياطية');
+            };
+            container.appendChild(jsonBtn);
+            
+        } else {
+            // عدة باركودات
+            container.innerHTML = `
+                <div style="margin-bottom: 15px; padding: 15px; background: #fff3cd; border-radius: 8px;">
+                    <p style="color: #856404; font-weight: 600;">
+                        ⚠️ البيانات كبيرة (${products.length} منتج)، سيتم إنشاء ${chunks.length} باركود
+                    </p>
+                    <p style="color: #856404; font-size: 13px; margin-top: 5px;">
+                        💡 <strong>نصيحة:</strong> استخدم تحميل ملف JSON بدلاً من الباركود للبيانات الكبيرة
+                    </p>
+                </div>
+                <div style="margin-bottom: 15px;">
+                    <p style="color: var(--text-muted); font-size: 13px;">
+                        التاريخ: ${this.formatDateTime(backupData.date)}
+                    </p>
+                </div>
+            `;
+            
+            for (let i = 0; i < chunks.length; i++) {
+                const canvas = document.createElement('canvas');
+                await QRCode.toCanvas(canvas, chunks[i], {
+                    width: 300,
+                    margin: 2
+                });
+                
+                const wrapper = document.createElement('div');
+                wrapper.style.marginBottom = '20px';
+                wrapper.style.padding = '15px';
+                wrapper.style.background = '#f8f9fa';
+                wrapper.style.borderRadius = '8px';
+                wrapper.innerHTML = `<p style="font-weight: 600; margin-bottom: 10px;">الجزء ${i + 1} من ${chunks.length}</p>`;
+                wrapper.appendChild(canvas);
+                container.appendChild(wrapper);
+            }
+            
+            // زر النسخ الاحتياطي كملف JSON (بديل آمن للبيانات الكبيرة)
+            const jsonBtn = document.createElement('button');
+            jsonBtn.className = 'btn btn-success';
+            jsonBtn.innerHTML = '<i class="fas fa-file-code"></i> تحميل كملف JSON (الطريقة الموصى بها)';
+            jsonBtn.style.marginTop = '15px';
+            jsonBtn.style.width = '100%';
+            jsonBtn.onclick = () => {
+                const blob = new Blob([jsonString], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `backup_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                this.toast.success('تم', 'تم تحميل ملف النسخة الاحتياطية');
+            };
+            container.appendChild(jsonBtn);
+        }
+        
+        this.toast.success('تم', 'تم إنشاء النسخة الاحتياطية');
+    } catch (error) {
+        console.error('❌ خطأ في إنشاء الباركود:', error);
+        this.toast.error('خطأ', 'فشل إنشاء الباركود: ' + error.message);
+    }
+    
+}
+
+// ✅ دالة مساعدة لتحميل مكتبة QRCode ديناميكياً
+loadQRCodeLibrary() {
+    return new Promise((resolve) => {
+        if (typeof QRCode !== 'undefined') {
+            resolve();
+            return;
+        }
+        
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js';
+        script.onload = () => {
+            console.log('✅ تم تحميل مكتبة QRCode');
+            resolve();
         };
-        await this.storage.set('contests', contests);
-        this.modal.close();
-        this.toast.success('تم', 'تم تحديث المسابقة');
-        this.renderContestsTable();
+        script.onerror = () => {
+            console.error('❌ فشل تحميل مكتبة QRCode');
+            resolve();
+        };
+        document.head.appendChild(script);
+    });
+}
+
+showImportQRModal() {
+    const body = `
+        <div class="form-group">
+            <label>اختر طريقة الاستيراد</label>
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button class="btn btn-outline" onclick="app.importFromImage()">
+                    <i class="fas fa-image"></i> من صورة
+                </button>
+                <button class="btn btn-outline" onclick="app.importFromCamera()">
+                    <i class="fas fa-camera"></i> من الكاميرا
+                </button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>أو الصق البيانات يدوياً</label>
+            <textarea class="form-textarea" id="backupJsonInput" rows="8" placeholder='{"version":"1.0","date":"...","products":[...]}'></textarea>
+        </div>
+    `;
+    
+    const footer = `
+        <button class="btn btn-outline" onclick="app.modal.close()">إلغاء</button>
+        <button class="btn btn-success" onclick="app.importFromJson()">
+            <i class="fas fa-upload"></i> استيراد
+        </button>
+    `;
+    
+    this.modal.open('استيراد النسخة الاحتياطية', body, footer);
+}
+
+async importFromJson() {
+    const jsonInput = document.getElementById('backupJsonInput').value.trim();
+    
+    if (!jsonInput) {
+        this.toast.error('خطأ', 'يرجى إدخال البيانات');
+        return;
+    }
+    
+    try {
+        const backupData = JSON.parse(jsonInput);
+        
+        if (!backupData.products || !Array.isArray(backupData.products)) {
+            throw new Error('صيغة البيانات غير صحيحة');
+        }
+        
+        this.modal.confirm(
+            'تأكيد الاستيراد',
+            `سيتم استيراد ${backupData.products.length} منتج. هل أنت متأكد؟ سيتم استبدال المنتجات الحالية!`,
+            async () => {
+                await this.storage.set('products', backupData.products);
+                this.toast.success('تم', `تم استيراد ${backupData.products.length} منتج بنجاح`);
+                await this.renderProductsTable();
+                await this.renderInventoryTable();
+                await this.updateStats();
+            }
+        );
+        
+    } catch (error) {
+        this.toast.error('خطأ', 'فشل في قراءة البيانات: ' + error.message);
     }
 }
 
-async deleteContest(contestId) {
-    this.modal.confirm('حذف المسابقة', 'هل أنت متأكد من حذف هذه المسابقة؟', async () => {
-        let contests = await this.storage.get('contests', []);
-        contests = contests.filter(c => c.id !== contestId);
-        await this.storage.set('contests', contests);
-        this.toast.success('تم', 'تم حذف المسابقة');
-        this.renderContestsTable();
-    });
+async importFromImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        this.toast.info('جاري', 'جاري قراءة الباركود...');
+        
+        // استخدام مكتبة jsQR لقراءة QR من الصورة
+        const script = document.createElement('script');
+        script.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js';
+        script.onload = async () => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width;
+                canvas.height = img.height;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, 0, 0);
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    document.getElementById('backupJsonInput').value = code.data;
+                    this.toast.success('تم', 'تم قراءة الباركود بنجاح');
+                } else {
+                    this.toast.error('خطأ', 'لم يتم العثور على باركود في الصورة');
+                }
+            };
+            img.src = URL.createObjectURL(file);
+        };
+        document.head.appendChild(script);
+    };
+    
+    input.click();
+}
+
+async importFromCamera() {
+    this.toast.warning('تنبيه', 'ميزة الكاميرا غير متوفرة حالياً. استخدم صورة بدلاً من ذلك');
+}
+// ===== تصدير المنتجات كملف JSON =====
+async exportProductsAsJSON() {
+    const statusEl = document.getElementById('exportStatus');
+    statusEl.innerHTML = '<p style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> جاري التصدير...</p>';
+    
+    try {
+        const products = await this.storage.get('products', []);
+        
+        if (products.length === 0) {
+            statusEl.innerHTML = '<p style="color: var(--warning);"><i class="fas fa-exclamation-triangle"></i> لا توجد منتجات للتصدير</p>';
+            this.toast.warning('تنبيه', 'لا توجد منتجات للتصدير');
+            return;
+        }
+        
+        // إنشاء كائن البيانات
+        const backupData = {
+            version: '1.0',
+            exportDate: new Date().toISOString(),
+            totalProducts: products.length,
+            products: products
+        };
+        
+        // تحويل إلى JSON
+        const jsonString = JSON.stringify(backupData, null, 2);
+        
+        // إنشاء Blob
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        
+        // إنشاء رابط التحميل
+        const dateStr = new Date().toISOString().split('T')[0];
+        const fileName = `mi_store_backup_${dateStr}_${products.length}products.json`;
+        
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        
+        // حساب حجم الملف
+        const sizeKB = (jsonString.length / 1024).toFixed(2);
+        
+        statusEl.innerHTML = `
+            <div style="background: #d4edda; padding: 15px; border-radius: 8px; border: 1px solid #c3e6cb;">
+                <p style="color: #155724; font-weight: 600; margin: 0;">
+                    <i class="fas fa-check-circle"></i> تم التصدير بنجاح!
+                </p>
+                <p style="color: #155724; font-size: 13px; margin: 8px 0 0 0;">
+                    📦 عدد المنتجات: <strong>${products.length}</strong><br>
+                    📄 اسم الملف: <strong>${fileName}</strong><br>
+                    💾 حجم الملف: <strong>${sizeKB} KB</strong>
+                </p>
+            </div>
+        `;
+        
+        this.toast.success('تم التصدير', `تم تصدير ${products.length} منتج بنجاح`);
+        
+        // تحديث معلومات النسخ الاحتياطي
+        await this.updateBackupInfo();
+        
+    } catch (error) {
+        console.error('❌ خطأ في التصدير:', error);
+        statusEl.innerHTML = `<p style="color: var(--danger);"><i class="fas fa-times-circle"></i> فشل التصدير: ${error.message}</p>`;
+        this.toast.error('خطأ', 'فشل تصدير المنتجات');
+    }
+}
+
+// ===== معالجة اختيار الملف =====
+handleFileSelect(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    
+    // التحقق من نوع الملف
+    if (!file.name.endsWith('.json')) {
+        this.toast.error('خطأ', 'يجب اختيار ملف بصيغة JSON');
+        return;
+    }
+    
+    const statusEl = document.getElementById('importStatus');
+    statusEl.innerHTML = '<p style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> جاري قراءة الملف...</p>';
+    
+    const reader = new FileReader();
+    
+    reader.onload = (e) => {
+        try {
+            const content = e.target.result;
+            const data = JSON.parse(content);
+            
+            // التحقق من صحة البيانات
+            if (!data.products || !Array.isArray(data.products)) {
+                throw new Error('صيغة الملف غير صحيحة - يجب أن يحتوي على مصفوفة products');
+            }
+            
+            if (data.products.length === 0) {
+                statusEl.innerHTML = '<p style="color: var(--warning);"><i class="fas fa-exclamation-triangle"></i> الملف لا يحتوي على منتجات</p>';
+                this.toast.warning('تنبيه', 'الملف لا يحتوي على منتجات');
+                return;
+            }
+            
+            // عرض معلومات الملف
+            statusEl.innerHTML = `
+                <div style="background: #fff3cd; padding: 15px; border-radius: 8px; border: 1px solid #ffeaa7;">
+                    <p style="color: #856404; font-weight: 600; margin: 0;">
+                        <i class="fas fa-file-code"></i> تم قراءة الملف بنجاح
+                    </p>
+                    <p style="color: #856404; font-size: 13px; margin: 8px 0 0 0;">
+                        📦 عدد المنتجات في الملف: <strong>${data.products.length}</strong><br>
+                        📅 تاريخ التصدير: <strong>${data.exportDate ? this.formatDateTime(data.exportDate) : 'غير معروف'}</strong><br>
+                        📄 اسم الملف: <strong>${file.name}</strong>
+                    </p>
+                    <button class="btn btn-warning" onclick="app.confirmImportProducts()" style="margin-top: 10px; width: 100%;">
+                        <i class="fas fa-check"></i> تأكيد الاستيراد
+                    </button>
+                </div>
+            `;
+            
+            // حفظ البيانات المؤقتة
+            this.pendingImportData = data;
+            
+        } catch (error) {
+            console.error('❌ خطأ في قراءة الملف:', error);
+            statusEl.innerHTML = `<p style="color: var(--danger);"><i class="fas fa-times-circle"></i> فشل قراءة الملف: ${error.message}</p>`;
+            this.toast.error('خطأ', 'فشل قراءة الملف');
+        }
+    };
+    
+    reader.onerror = () => {
+        statusEl.innerHTML = '<p style="color: var(--danger);"><i class="fas fa-times-circle"></i> فشل قراءة الملف</p>';
+        this.toast.error('خطأ', 'فشل قراءة الملف');
+    };
+    
+    reader.readAsText(file);
+}
+
+// ===== تأكيد استيراد المنتجات =====
+async confirmImportProducts() {
+    if (!this.pendingImportData || !this.pendingImportData.products) {
+        this.toast.error('خطأ', 'لا توجد بيانات للاستيراد');
+        return;
+    }
+    
+    const productsCount = this.pendingImportData.products.length;
+    
+    this.modal.confirm(
+        'تأكيد الاستيراد',
+        `سيتم استبدال جميع المنتجات الحالية (${productsCount} منتج) بالمنتجات من الملف. هل أنت متأكد؟`,
+        async () => {
+            const statusEl = document.getElementById('importStatus');
+            statusEl.innerHTML = '<p style="color: var(--info);"><i class="fas fa-spinner fa-spin"></i> جاري الاستيراد...</p>';
+            
+            try {
+                // حفظ المنتجات الجديدة
+                await this.storage.set('products', this.pendingImportData.products);
+                
+                statusEl.innerHTML = `
+                    <div style="background: #d4edda; padding: 15px; border-radius: 8px; border: 1px solid #c3e6cb;">
+                        <p style="color: #155724; font-weight: 600; margin: 0;">
+                            <i class="fas fa-check-circle"></i> تم الاستيراد بنجاح!
+                        </p>
+                        <p style="color: #155724; font-size: 13px; margin: 8px 0 0 0;">
+                            📦 تم استيراد <strong>${productsCount}</strong> منتج بنجاح<br>
+                            ✅ تم تحديث الموقع
+                        </p>
+                    </div>
+                `;
+                
+                this.toast.success('تم الاستيراد', `تم استيراد ${productsCount} منتج بنجاح`);
+                
+                // مسح البيانات المؤقتة
+                this.pendingImportData = null;
+                
+                // إعادة تعيين حقل الملف
+                document.getElementById('importJsonFile').value = '';
+                
+                // تحديث الواجهات
+                await this.renderProductsTable();
+                await this.renderInventoryTable();
+                await this.updateStats();
+                await this.renderLowStock();
+                await this.updateBackupInfo();
+                
+            } catch (error) {
+                console.error('❌ خطأ في الاستيراد:', error);
+                statusEl.innerHTML = `<p style="color: var(--danger);"><i class="fas fa-times-circle"></i> فشل الاستيراد: ${error.message}</p>`;
+                this.toast.error('خطأ', 'فشل استيراد المنتجات');
+            }
+        }
+    );
+}
+
+// ===== تحديث معلومات النسخ الاحتياطي =====
+async updateBackupInfo() {
+    const products = await this.storage.get('products', []);
+    
+    // عدد المنتجات
+    const countEl = document.getElementById('backupProductsCount');
+    if (countEl) countEl.textContent = products.length;
+    
+    // تاريخ آخر نسخة
+    const dateEl = document.getElementById('backupLastDate');
+    if (dateEl) {
+        const lastBackup = localStorage.getItem('mi_store_last_backup');
+        dateEl.textContent = lastBackup ? this.formatDate(lastBackup) : 'لم يتم بعد';
+    }
+    
+    // حجم البيانات
+    const sizeEl = document.getElementById('backupSize');
+    if (sizeEl) {
+        const jsonString = JSON.stringify(products);
+        const sizeKB = (jsonString.length / 1024).toFixed(2);
+        sizeEl.textContent = sizeKB + ' KB';
+    }
 }
 }
 
