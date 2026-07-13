@@ -3,16 +3,39 @@
 class StorageManager {
     constructor() {
         this.prefix = 'mi_store_';
-        this.useFirebase = typeof db !== 'undefined';
+        this.useFirebase = typeof window.db !== 'undefined' && window.db !== null;
+        this.cache = {};
+        this.cacheTimeout = 60000; // دقيقة واحدة
         console.log('📊 نظام التخزين في موقع الزبائن:', this.useFirebase ? 'Firebase ✅' : 'LocalStorage فقط');
     }
     
     async get(key, defaultValue = null) {
+        // ✅ السلة والتقييمات تُحفظ محلياً فقط (لكل مستخدم)
+        if (key === 'cart' || key === 'ratings') {
+            return this.getLocal(key, defaultValue);
+        }
+        
+        // ✅ المنتجات تُجلب من collection منفصل مع cache
+        if (key === 'products') {
+            return await this.getAllProducts();
+        }
+        
+        // ✅ التحقق من الـ cache
+        const cacheKey = key;
+        if (this.cache[cacheKey] && (Date.now() - this.cache[cacheKey].time) < this.cacheTimeout) {
+            console.log('📥 من الـ cache:', key);
+            return this.cache[cacheKey].value;
+        }
+        
         if (this.useFirebase) {
             try {
-                const doc = await db.collection('mistore').doc(key).get();
+                const doc = await window.db.collection('mistore').doc(key).get();
                 if (doc.exists) {
-                    return doc.data().value;
+                    const value = doc.data().value;
+                    // حفظ في الـ cache
+                    this.cache[cacheKey] = { value, time: Date.now() };
+                    console.log('📥 تم جلب', key, 'من Firebase');
+                    return value;
                 }
                 return defaultValue;
             } catch (error) {
@@ -25,12 +48,21 @@ class StorageManager {
     }
     
     async set(key, value) {
+        // ✅ السلة والتقييمات تُحفظ محلياً فقط
+        if (key === 'cart' || key === 'ratings') {
+            return this.setLocal(key, value);
+        }
+        
+        // ✅ مسح الـ cache عند التحديث
+        delete this.cache[key];
+        
         if (this.useFirebase) {
             try {
-                await db.collection('mistore').doc(key).set({
+                await window.db.collection('mistore').doc(key).set({
                     value: value,
                     updatedAt: new Date().toISOString()
                 });
+                console.log('📤 تم حفظ', key, 'في Firebase');
                 return true;
             } catch (error) {
                 console.error('❌ خطأ في حفظ البيانات:', error);
@@ -39,6 +71,39 @@ class StorageManager {
         } else {
             return this.setLocal(key, value);
         }
+    }
+    
+    async getAllProducts() {
+        // ✅ التحقق من الـ cache
+        if (this.cache['products'] && (Date.now() - this.cache['products'].time) < this.cacheTimeout) {
+            console.log('📥 المنتجات من الـ cache');
+            return this.cache['products'].value;
+        }
+        
+        if (!this.useFirebase) {
+            return this.getLocal('products', []);
+        }
+        try {
+            const snapshot = await window.db.collection('products').get();
+            const products = [];
+            snapshot.forEach(doc => {
+                products.push({ id: parseInt(doc.id), ...doc.data() });
+            });
+            products.sort((a, b) => a.id - b.id);
+            // حفظ في الـ cache
+            this.cache['products'] = { value: products, time: Date.now() };
+            console.log('📦 تم جلب', products.length, 'منتج من Firebase');
+            return products;
+        } catch (error) {
+            console.error('❌ خطأ في جلب المنتجات:', error);
+            return this.getLocal('products', []);
+        }
+    }
+    
+    // ✅ مسح الـ cache يدوياً
+    clearCache() {
+        this.cache = {};
+        console.log('🗑️ تم مسح الـ cache');
     }
     
     getLocal(key, defaultValue = null) {
@@ -149,6 +214,66 @@ class StoreApp {
         await this.loadAboutContent();
         
         console.log('✅ تم تهيئة موقع الزبائن بنجاح');
+    console.log('🚀 بدء تهيئة موقع الزبائن...');
+    
+    // تحميل البيانات من Firebase
+    try {
+        this.cart = (await this.storage.get('cart', [])) || [];
+        this.ratings = (await this.storage.get('ratings', {})) || {};
+    } catch (error) {
+        console.warn('⚠️ استخدام localStorage كاحتياط');
+        this.cart = this.storage.getLocal('cart', []);
+        this.ratings = this.storage.getLocal('ratings', {});
+    }
+    
+    await this.loadSettings();
+    this.setupEventListeners();
+    await this.renderAllSections();
+    this.updateCartUI();
+    this.startCountdown();
+    this.setupWhatsApp();
+    this.loadContactInfo();
+    this.showNotification();
+    await this.loadAboutContent();
+    
+    // ✅ إضافة التحديث التلقائي من Firebase
+    this.setupRealtimeUpdates();
+    
+    console.log('✅ تم تهيئة موقع الزبائن بنجاح');
+}
+
+// ✅ دالة جديدة للتحديث التلقائي
+setupRealtimeUpdates() {
+    if (!this.storage.useFirebase) return;
+    
+    console.log('🔄 بدء الاستماع للتحديثات من Firebase...');
+    
+    // الاستماع لتغييرات المنتجات
+    window.db.collection('mistore').doc('products').onSnapshot((doc) => {
+        if (doc.exists) {
+            console.log('🔄 تم تحديث المنتجات من Firebase');
+            this.renderAllSections();
+        }
+    }, (error) => {
+        console.error('❌ خطأ في الاستماع للتحديثات:', error);
+    });
+    
+    // الاستماع لتغييرات الإعدادات
+    window.db.collection('mistore').doc('settings').onSnapshot((doc) => {
+        if (doc.exists) {
+            console.log('🔄 تم تحديث الإعدادات من Firebase');
+            this.loadSettings();
+        }
+    });
+    
+    // الاستماع لتغييرات العروض
+    window.db.collection('mistore').doc('offers').onSnapshot((doc) => {
+        if (doc.exists) {
+            console.log('🔄 تم تحديث العروض من Firebase');
+            this.renderOffers();
+        }
+    });
+
     }
 
     // ===== الإعدادات والاتصال =====
@@ -159,10 +284,10 @@ class StoreApp {
         if (addressEl) addressEl.textContent = settings.storeAddress || 'بغداد - العراق';
         
         const phoneEl = document.getElementById('storePhone');
-        if (phoneEl) phoneEl.textContent = settings.storePhone || '07700000000';
+        if (phoneEl) phoneEl.textContent = settings.storePhone || '07738414085';
         
         const footerPhoneEl = document.getElementById('footerPhone');
-        if (footerPhoneEl) footerPhoneEl.textContent = settings.storePhone || '07700000000';
+        if (footerPhoneEl) footerPhoneEl.textContent = settings.storePhone || '07738414085';
         
         const totalProductsEl = document.getElementById('totalProducts');
         if (totalProductsEl) {
@@ -173,7 +298,7 @@ class StoreApp {
 
     setupWhatsApp() {
         const settings = this.storage.getLocal('settings', {});
-        const phone = settings.storePhone || '07700000000';
+        const phone = settings.storePhone || '07738414085';
         const cleanPhone = phone.replace(/\D/g, '');
         const whatsappBtn = document.getElementById('whatsappBtn');
         if (whatsappBtn) whatsappBtn.href = `https://wa.me/${cleanPhone}`;
@@ -450,8 +575,24 @@ class StoreApp {
     }
 
     createProductCard(product, badgeType = null) {
-        const categoryNames = { phones: 'هواتف', accessories: 'إكسسوارات', chargers: 'شواحن', cases: 'كفرات', screen: 'واقيات شاشة' };
-        const icons = { phones: 'fa-mobile-alt', accessories: 'fa-headphones', chargers: 'fa-charging-station', cases: 'fa-mobile', screen: 'fa-shield-alt' };
+        const categoryNames = { 
+    phones: 'هواتف', 
+    accessories: 'الملحقات', 
+    chargers: 'الشواحن', 
+    cases: 'كفرات', 
+    stickers: 'اللواصق',
+    watches: 'الساعات',
+    glasses: 'النظارات'
+};
+const icons = { 
+    phones: 'fa-mobile-alt', 
+    accessories: 'fa-headphones', 
+    chargers: 'fa-charging-station', 
+    cases: 'fa-mobile', 
+    stickers: 'fa-sticky-note',
+    watches: 'fa-clock',
+    glasses: 'fa-glasses'
+};
         const rating = this.getProductRating(product.id);
         const inCart = this.cart.find(item => item.id === product.id);
 
@@ -511,7 +652,7 @@ class StoreApp {
 
         const related = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
         const settings = await this.storage.get('settings', {});
-        const phone = settings.storePhone || '07700000000';
+        const phone = settings.storePhone || '07738414085';
         const message = `مرحباً، أريد الاستفسار عن: ${product.name} - ${this.formatCurrency(product.salePrice)}`;
         const whatsappLink = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
 
@@ -750,7 +891,7 @@ class StoreApp {
         }
 
         const settings = this.storage.getLocal('settings', {});
-        const phone = settings.storePhone || '07700000000';
+        const phone = settings.storePhone || '07738414085';
         const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         
         let discountAmount = 0;
