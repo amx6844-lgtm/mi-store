@@ -284,10 +284,10 @@ setupRealtimeUpdates() {
         if (addressEl) addressEl.textContent = settings.storeAddress || 'بغداد - العراق';
         
         const phoneEl = document.getElementById('storePhone');
-        if (phoneEl) phoneEl.textContent = settings.storePhone || '07738414085';
+        if (phoneEl) phoneEl.textContent = settings.storePhone || '+9647738414085';
         
         const footerPhoneEl = document.getElementById('footerPhone');
-        if (footerPhoneEl) footerPhoneEl.textContent = settings.storePhone || '07738414085';
+        if (footerPhoneEl) footerPhoneEl.textContent = settings.storePhone || '+9647738414085';
         
         const totalProductsEl = document.getElementById('totalProducts');
         if (totalProductsEl) {
@@ -298,7 +298,7 @@ setupRealtimeUpdates() {
 
     setupWhatsApp() {
         const settings = this.storage.getLocal('settings', {});
-        const phone = settings.storePhone || '07738414085';
+        const phone = settings.storePhone || '+9647738414085';
         const cleanPhone = phone.replace(/\D/g, '');
         const whatsappBtn = document.getElementById('whatsappBtn');
         if (whatsappBtn) whatsappBtn.href = `https://wa.me/${cleanPhone}`;
@@ -652,7 +652,7 @@ const icons = {
 
         const related = products.filter(p => p.category === product.category && p.id !== product.id).slice(0, 4);
         const settings = await this.storage.get('settings', {});
-        const phone = settings.storePhone || '07738414085';
+        const phone = settings.storePhone || '+9647738414085';
         const message = `مرحباً، أريد الاستفسار عن: ${product.name} - ${this.formatCurrency(product.salePrice)}`;
         const whatsappLink = `https://wa.me/${phone.replace(/\D/g, '')}?text=${encodeURIComponent(message)}`;
 
@@ -891,7 +891,7 @@ const icons = {
         }
 
         const settings = this.storage.getLocal('settings', {});
-        const phone = settings.storePhone || '07738414085';
+        const phone = settings.storePhone || '+9647738414085';
         const subtotal = this.cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
         
         let discountAmount = 0;
@@ -1303,7 +1303,7 @@ async renderWhatsNewNewArrivals() {
     // ===== تحميل معلومات التواصل =====
 loadContactInfo() {
     const settings = this.storage.getLocal('settings', {});
-    const phone = settings.storePhone || '07738414085';
+    const phone = settings.storePhone || '+9647738414085';
     
     // تحديث أزرار التواصل
     const phoneBtn = document.getElementById('contactPhoneBtn');
