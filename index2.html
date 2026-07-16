@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Mi Store - نظام الكفرات الذكي V5 (Advanced)</title>
@@ -252,8 +253,8 @@
         </div>
     </div>
 
-    <!-- OpenCV.js -->
-    <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
+      <!-- OpenCV.js (بدون onload لتجنب خطأ ReferenceError) -->
+    <script async src="https://docs.opencv.org/4.8.0/opencv.js" type="text/javascript"></script>
     
     <!-- TensorFlow.js + MobileNet -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
@@ -279,18 +280,66 @@
         let streams = {};
         let adminImages = { cam: null, btn: null, fin: null, full: null };
         let searchImages = { cam: null, btn: null, fin: null, full: null };
-        let cvReady = false;
+                let cvReady = false;
         let tfReady = false;
         let mobilenetModel = null;
 
-        // ================= OpenCV Ready =================
-        window.onOpenCvReady = () => {
-            cv['onRuntimeInitialized'] = () => {
-                cvReady = true;
-                document.getElementById('opencvStatus').className = 'status-item ready';
-                document.getElementById('opencvStatus').textContent = '✅ OpenCV.js';
-            };
-        };
+        // ================= تهيئة OpenCV بشكل آمن (بدون أخطاء) =================
+        function initOpenCV() {
+            if (typeof cv !== 'undefined' && cv.onRuntimeInitialized) {
+                cv.onRuntimeInitialized = () => {
+                    cvReady = true;
+                    const statusEl = document.getElementById('opencvStatus');
+                    if (statusEl) {
+                        statusEl.className = 'status-item ready';
+                        statusEl.textContent = '✅ OpenCV.js جاهز';
+                    }
+                    console.log('✅ OpenCV.js Runtime Initialized Successfully!');
+                };
+            } else {
+                // إذا لم تكن المكتبة محملة بعد، انتظر 100 جزء من الثانية وحاول مجدداً
+                setTimeout(initOpenCV, 100);
+            }
+        }
+        // ابدأ فحص التحميل فوراً
+        initOpenCV();
+
+        // ================= تهيئة TensorFlow + MobileNet =================
+        async function loadMobileNet() {
+            try {
+                const statusTf = document.getElementById('tfStatus');
+                const statusMb = document.getElementById('mobilenetStatus');
+                
+                if(statusTf) statusTf.textContent = '⏳ جاري تحميل TensorFlow...';
+                
+                mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
+                tfReady = true;
+                
+                if(statusTf) {
+                    statusTf.className = 'status-item ready';
+                    statusTf.textContent = '✅ TensorFlow.js جاهز';
+                }
+                if(statusMb) {
+                    statusMb.className = 'status-item ready';
+                    statusMb.textContent = '✅ MobileNet جاهز';
+                }
+                console.log('✅ MobileNet Model Loaded Successfully!');
+            } catch (err) {
+                console.error('MobileNet load error:', err);
+                const statusTf = document.getElementById('tfStatus');
+                const statusMb = document.getElementById('mobilenetStatus');
+                if(statusTf) {
+                    statusTf.className = 'status-item error';
+                    statusTf.textContent = '❌ خطأ في TensorFlow';
+                }
+                if(statusMb) {
+                    statusMb.className = 'status-item error';
+                    statusMb.textContent = '❌ خطأ في MobileNet';
+                }
+            }
+        }
+        // ابدأ تحميل MobileNet فوراً
+        loadMobileNet();
 
         // ================= TensorFlow + MobileNet Ready =================
         async function loadMobileNet() {
