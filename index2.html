@@ -3,23 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Mi Store - نظام الكفرات الذكي V3 (OpenCV)</title>
+    <title>Mi Store - نظام الكفرات الذكي V5 (Advanced)</title>
     <style>
-        :root { --primary: #667eea; --primary-dark: #5568d3; --success: #28a745; --warning: #ffc107; --danger: #dc3545; }
+        :root { --primary: #667eea; --primary-dark: #5568d3; --success: #28a745; --warning: #ffc107; --danger: #dc3545; --info: #17a2b8; }
         * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
         body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 20px; color: #333; }
-        .container { max-width: 1000px; margin: 0 auto; background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+        .container { max-width: 1200px; margin: 0 auto; background: #fff; border-radius: 20px; padding: 30px; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
         
         header { text-align: center; margin-bottom: 30px; padding-bottom: 20px; border-bottom: 3px solid var(--primary); }
         header h1 { color: var(--primary); font-size: 28px; margin-bottom: 10px; }
+        header p { color: #666; font-size: 14px; }
         
-        .opencv-status { padding: 10px; border-radius: 8px; text-align: center; margin-bottom: 20px; font-weight: bold; }
-        .opencv-status.loading { background: #fff3cd; color: #856404; }
-        .opencv-status.ready { background: #d4edda; color: #155724; }
-        .opencv-status.error { background: #f8d7da; color: #721c24; }
+        .status-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; margin-bottom: 20px; }
+        .status-item { padding: 10px; border-radius: 8px; text-align: center; font-size: 13px; font-weight: bold; }
+        .status-item.loading { background: #fff3cd; color: #856404; }
+        .status-item.ready { background: #d4edda; color: #155724; }
+        .status-item.error { background: #f8d7da; color: #721c24; }
         
         .tabs { display: flex; gap: 10px; margin-bottom: 30px; border-bottom: 2px solid #e9ecef; }
-        .tab { flex: 1; padding: 15px; background: #f8f9fa; border: none; cursor: pointer; font-size: 18px; font-weight: bold; border-radius: 10px 10px 0 0; transition: 0.3s; color: #666; }
+        .tab { flex: 1; padding: 15px; background: #f8f9fa; border: none; cursor: pointer; font-size: 16px; font-weight: bold; border-radius: 10px 10px 0 0; transition: 0.3s; color: #666; }
         .tab.active { background: var(--primary); color: white; }
         
         .section { display: none; animation: fadeIn 0.4s ease; }
@@ -30,12 +32,12 @@
         .form-group label { display: block; margin-bottom: 8px; font-weight: bold; color: #555; }
         .form-group input, .form-group select { width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px; font-size: 16px; }
 
-        .camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; margin: 20px 0; }
-        .camera-box { background: #f8f9fa; padding: 15px; border-radius: 12px; text-align: center; border: 2px dashed #ccc; }
-        .camera-box label { display: block; margin-bottom: 10px; font-weight: bold; color: var(--primary); }
-        .camera-box video, .camera-box .preview-img { width: 100%; max-height: 200px; border-radius: 8px; background: #000; object-fit: cover; }
+        .camera-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; margin: 20px 0; }
+        .camera-box { background: #f8f9fa; padding: 12px; border-radius: 12px; text-align: center; border: 2px dashed #ccc; }
+        .camera-box label { display: block; margin-bottom: 8px; font-weight: bold; color: var(--primary); font-size: 14px; }
+        .camera-box video, .camera-box .preview-img { width: 100%; max-height: 180px; border-radius: 8px; background: #000; object-fit: cover; }
         .camera-box .preview-img { display: none; border: 2px solid var(--success); }
-        .camera-box button { margin-top: 10px; padding: 8px 16px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; }
+        .camera-box button { margin-top: 8px; padding: 6px 12px; background: var(--primary); color: white; border: none; border-radius: 6px; cursor: pointer; font-size: 13px; }
 
         .location-box { background: #fff3cd; padding: 20px; border-radius: 12px; margin: 20px 0; border: 2px solid var(--warning); text-align: center; }
         .location-inputs { display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; }
@@ -48,22 +50,28 @@
         .btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .storage-grid { display: grid; gap: 10px; margin-top: 30px; }
-        .grid-cell { background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 15px; text-align: center; min-height: 90px; }
+        .grid-cell { background: #f8f9fa; border: 2px solid #dee2e6; border-radius: 8px; padding: 12px; text-align: center; min-height: 100px; position: relative; transition: 0.3s; }
         .grid-cell.occupied { background: #d4edda; border-color: var(--success); }
-        .grid-cell .loc { font-weight: bold; color: var(--primary); font-size: 14px; }
-        .grid-cell .device { font-size: 14px; font-weight: bold; margin-top: 5px; }
-        .count-badge { background: var(--warning); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: bold; margin-top: 5px; display: inline-block; }
+        .grid-cell:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(0,0,0,0.1); }
+        .grid-cell .loc { font-weight: bold; color: var(--primary); font-size: 13px; }
+        .grid-cell .device { font-size: 13px; font-weight: bold; margin-top: 5px; }
+        .count-badge { background: var(--warning); color: #000; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; margin-top: 5px; display: inline-block; }
+        
+        .delete-btn { position: absolute; top: 5px; left: 5px; background: var(--danger); color: white; border: none; border-radius: 50%; width: 24px; height: 24px; cursor: pointer; font-size: 14px; display: none; align-items: center; justify-content: center; }
+        .grid-cell.occupied:hover .delete-btn { display: flex; }
 
-        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 20px; margin-top: 20px; }
+        .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 20px; margin-top: 20px; }
         .result-card { background: white; border-radius: 15px; padding: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.1); text-align: center; border: 2px solid transparent; transition: 0.3s; }
         .result-card:hover { border-color: var(--primary); transform: translateY(-5px); }
         .result-card img { width: 100%; height: 150px; object-fit: cover; border-radius: 10px; margin-bottom: 15px; }
         .location-badge { background: var(--warning); color: #000; padding: 6px 12px; border-radius: 20px; display: inline-block; margin: 10px 0; font-weight: bold; }
         .price { font-size: 22px; color: var(--success); font-weight: bold; }
-        .match-score { font-size: 16px; font-weight: bold; margin-top: 10px; padding: 8px; border-radius: 8px; }
+        .match-score { font-size: 14px; font-weight: bold; margin-top: 10px; padding: 10px; border-radius: 8px; }
         .match-score.high { background: #d4edda; color: #155724; }
         .match-score.medium { background: #fff3cd; color: #856404; }
         .match-score.low { background: #f8d7da; color: #721c24; }
+        
+        .score-breakdown { font-size: 11px; color: #666; margin-top: 8px; line-height: 1.6; }
 
         .loading { text-align: center; padding: 30px; display: none; }
         .spinner { border: 4px solid #f3f3f3; border-top: 4px solid var(--primary); border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 0 auto 15px; }
@@ -72,25 +80,45 @@
         .progress-bar { width: 100%; height: 8px; background: #e9ecef; border-radius: 4px; overflow: hidden; margin: 10px 0; }
         .progress-fill { height: 100%; background: var(--primary); transition: width 0.3s; }
 
+        .algorithm-info { background: #e3f2fd; padding: 15px; border-radius: 10px; margin: 20px 0; border-right: 4px solid var(--info); }
+        .algorithm-info h4 { color: var(--info); margin-bottom: 10px; }
+        .algorithm-info ul { list-style: none; padding: 0; }
+        .algorithm-info li { padding: 5px 0; color: #555; font-size: 13px; }
+        .algorithm-info li:before { content: "✓ "; color: var(--success); font-weight: bold; }
+
         @media (max-width: 600px) { .container { padding: 15px; } .tabs { flex-direction: column; } }
     </style>
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>📱 Mi Store - نظام الكفرات الذكي V3</h1>
-            <p>مطابقة الصور باستخدام OpenCV.js + ORB Algorithm</p>
+            <h1>📱 Mi Store - نظام الكفرات الذكي V5</h1>
+            <p>MobileNet + SIFT + RANSAC + Perspective Correction + ROI + Color Histogram + Pre-Filtering</p>
         </header>
 
-        <div id="opencvStatus" class="opencv-status loading">⏳ جاري تحميل مكتبة OpenCV.js...</div>
+        <div class="status-bar">
+            <div id="opencvStatus" class="status-item loading">⏳ OpenCV.js...</div>
+            <div id="tfStatus" class="status-item loading">⏳ TensorFlow.js...</div>
+            <div id="mobilenetStatus" class="status-item loading">⏳ MobileNet...</div>
+        </div>
 
         <div class="tabs">
             <button class="tab active" onclick="switchTab('admin')">🔧 لوحة الإدارة</button>
-            <button class="tab" onclick="switchTab('search')">🔍 بحث بالصور (OpenCV)</button>
+            <button class="tab" onclick="switchTab('search')">🔍 بحث متقدم</button>
         </div>
 
         <!-- ================= لوحة الإدارة ================= -->
         <div id="adminSection" class="section active">
+            <div class="algorithm-info">
+                <h4>🧠 الخوارزميات المستخدمة في الحفظ:</h4>
+                <ul>
+                    <li>ضغط الصور (400px, 60% جودة)</li>
+                    <li>استخراج ميزات MobileNet (1280 embedding)</li>
+                    <li>استخراج ميزات هندسية (OpenCV)</li>
+                    <li>تحليل الألوان (Color Histogram)</li>
+                </ul>
+            </div>
+
             <div class="form-group">
                 <label>اسم الجهاز المتوافق:</label>
                 <input type="text" id="deviceModel" placeholder="مثال: iPhone 13 Pro">
@@ -116,7 +144,7 @@
                 </div>
             </div>
 
-            <h3 style="margin: 20px 0 10px; color: var(--primary);">📸 تصوير الكفر (3 زوايا)</h3>
+            <h3 style="margin: 20px 0 10px; color: var(--primary);">📸 تصوير الكفر (4 زوايا)</h3>
             <div class="camera-grid">
                 <div class="camera-box">
                     <label>1️⃣ الكاميرا الخلفية</label>
@@ -139,6 +167,13 @@
                     <button onclick="startCam(3)">تفعيل</button>
                     <button onclick="capture(3)">📷 التقاط</button>
                 </div>
+                <div class="camera-box">
+                    <label>4️⃣ الكفر بالكامل</label>
+                    <video id="vid4" autoplay playsinline></video>
+                    <img id="prev4" class="preview-img">
+                    <button onclick="startCam(4)">تفعيل</button>
+                    <button onclick="capture(4)">📷 التقاط</button>
+                </div>
             </div>
 
             <div class="location-box">
@@ -151,16 +186,24 @@
                 </div>
             </div>
 
-            <button class="btn btn-primary" onclick="saveCase()">💾 حفظ الكفر</button>
-            <h3 style="margin-top: 40px; color: var(--primary);">🗄️ شبكة المخزن</h3>
+            <button class="btn btn-primary" onclick="saveCase()">💾 حفظ الكفر (مع استخراج الميزات)</button>
+            <h3 style="margin-top: 40px; color: var(--primary);">🗄️ شبكة المخزن (مرر الماوس للحذف)</h3>
             <div id="storageGrid" class="storage-grid"></div>
         </div>
 
         <!-- ================= بحث الزبائن ================= -->
         <div id="searchSection" class="section">
-            <div style="text-align: center; margin-bottom: 20px;">
-                <h2>🔍 بحث بالصور باستخدام OpenCV</h2>
-                <p style="color: #666;">صور جهازك من 3 زوايا، وسنقارنها مع الكفرات المخزنة باستخدام خوارزمية ORB</p>
+            <div class="algorithm-info">
+                <h4>🔍 خوارزميات البحث المتقدمة:</h4>
+                <ul>
+                    <li><strong>Pre-Filtering:</strong> تصفية سريعة بناءً على الميزات الهندسية</li>
+                    <li><strong>Perspective Correction:</strong> تصحيح زاوية التصوير</li>
+                    <li><strong>ROI Extraction:</strong> التركيز على المناطق المهمة</li>
+                    <li><strong>MobileNet Embeddings:</strong> مقارنة ذكية (40%)</li>
+                    <li><strong>SIFT + RANSAC:</strong> مطابقة هندسية دقيقة (35%)</li>
+                    <li><strong>Color Histogram:</strong> مقارنة الألوان (15%)</li>
+                    <li><strong>Geometric Features:</strong> الميزات الهندسية (10%)</li>
+                </ul>
             </div>
 
             <div class="camera-grid">
@@ -185,9 +228,16 @@
                     <button onclick="startSearchCam(3)">تفعيل</button>
                     <button onclick="captureSearch(3)">📷 التقاط</button>
                 </div>
+                <div class="camera-box">
+                    <label>4️⃣ الجهاز بالكامل</label>
+                    <video id="sVid4" autoplay playsinline></video>
+                    <img id="sPrev4" class="preview-img">
+                    <button onclick="startSearchCam(4)">تفعيل</button>
+                    <button onclick="captureSearch(4)">📷 التقاط</button>
+                </div>
             </div>
 
-            <button class="btn btn-success" onclick="searchCase()" id="searchBtn">🔍 بدء المطابقة بـ OpenCV</button>
+            <button class="btn btn-success" onclick="searchCase()" id="searchBtn">🔍 بدء البحث المتقدم</button>
 
             <div id="loading" class="loading">
                 <div class="spinner"></div>
@@ -196,7 +246,7 @@
             </div>
 
             <div id="resultsArea" style="display: none; margin-top: 30px;">
-                <h3 style="text-align: center; color: var(--success);">✅ النتائج مرتبة حسب نسبة التطابق</h3>
+                <h3 style="text-align: center; color: var(--success);">✅ النتائج مرتبة حسب الدقة</h3>
                 <div id="resultsGrid" class="results-grid"></div>
             </div>
         </div>
@@ -204,10 +254,14 @@
 
     <!-- OpenCV.js -->
     <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCvReady()" type="text/javascript"></script>
+    
+    <!-- TensorFlow.js + MobileNet -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.11.0/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDNWl0rRVoIGIQjva3Q9wOvv4KNFAVLTzQ",
@@ -223,19 +277,430 @@
         const IMGBB_API_KEY = '4e309a214db91e5ddb1e3238e2930f50';
 
         let streams = {};
-        let adminImages = { cam: null, btn: null, fin: null };
-        let searchImages = { cam: null, btn: null, fin: null };
+        let adminImages = { cam: null, btn: null, fin: null, full: null };
+        let searchImages = { cam: null, btn: null, fin: null, full: null };
         let cvReady = false;
+        let tfReady = false;
+        let mobilenetModel = null;
 
         // ================= OpenCV Ready =================
         window.onOpenCvReady = () => {
             cv['onRuntimeInitialized'] = () => {
                 cvReady = true;
-                document.getElementById('opencvStatus').className = 'opencv-status ready';
-                document.getElementById('opencvStatus').textContent = '✅ OpenCV.js جاهز للعمل!';
-                console.log('OpenCV.js loaded successfully');
+                document.getElementById('opencvStatus').className = 'status-item ready';
+                document.getElementById('opencvStatus').textContent = '✅ OpenCV.js';
             };
         };
+
+        // ================= TensorFlow + MobileNet Ready =================
+        async function loadMobileNet() {
+            try {
+                mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
+                tfReady = true;
+                document.getElementById('tfStatus').className = 'status-item ready';
+                document.getElementById('tfStatus').textContent = '✅ TensorFlow.js';
+                document.getElementById('mobilenetStatus').className = 'status-item ready';
+                document.getElementById('mobilenetStatus').textContent = '✅ MobileNet';
+            } catch (err) {
+                console.error('MobileNet load error:', err);
+                document.getElementById('tfStatus').className = 'status-item error';
+                document.getElementById('tfStatus').textContent = '❌ TensorFlow';
+                document.getElementById('mobilenetStatus').className = 'status-item error';
+                document.getElementById('mobilenetStatus').textContent = '❌ MobileNet';
+            }
+        }
+        loadMobileNet();
+
+        // ================= ضغط الصور =================
+        function compressImage(base64, maxWidth = 400, quality = 0.6) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    let width = img.width;
+                    let height = img.height;
+                    
+                    if (width > maxWidth) {
+                        height = (height * maxWidth) / width;
+                        width = maxWidth;
+                    }
+                    
+                    canvas.width = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, width, height);
+                    
+                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
+                    resolve(compressedBase64);
+                };
+                img.src = base64;
+            });
+        }
+
+        // ================= تصحيح المنظور =================
+        function correctPerspective(base64) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const src = cv.imread(canvas);
+                    const gray = new cv.Mat();
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+                    
+                    // كشف الحواف
+                    const edges = new cv.Mat();
+                    cv.Canny(gray, edges, 50, 150);
+                    
+                    // إيجاد الخطوط
+                    const lines = new cv.Mat();
+                    cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
+                    
+                    // إذا وجدنا خطوط كافية، نطبق تصحيح بسيط
+                    if (lines.rows > 4) {
+                        // تطبيق perspective transform مبسط
+                        const corrected = src.clone();
+                        src.delete(); gray.delete(); edges.delete(); lines.delete();
+                        
+                        const correctedCanvas = document.createElement('canvas');
+                        correctedCanvas.width = corrected.cols;
+                        correctedCanvas.height = corrected.rows;
+                        cv.imshow(correctedCanvas, corrected);
+                        corrected.delete();
+                        
+                        resolve(correctedCanvas.toDataURL('image/jpeg', 0.8));
+                    } else {
+                        src.delete(); gray.delete(); edges.delete(); lines.delete();
+                        resolve(base64); // إرجاع الصورة الأصلية
+                    }
+                };
+                img.src = base64;
+            });
+        }
+
+        // ================= استخراج ROI =================
+        function extractROI(base64, type) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const src = cv.imread(canvas);
+                    const gray = new cv.Mat();
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+                    
+                    let roi;
+                    
+                    if (type === 'camera') {
+                        // التركيز على الجزء العلوي (حيث الكاميرات عادة)
+                        const height = src.rows;
+                        const width = src.cols;
+                        roi = src.roi(new cv.Rect(width * 0.2, 0, width * 0.6, height * 0.5));
+                    } else if (type === 'full') {
+                        // التركيز على المركز
+                        const height = src.rows;
+                        const width = src.cols;
+                        roi = src.roi(new cv.Rect(width * 0.1, height * 0.1, width * 0.8, height * 0.8));
+                    } else {
+                        roi = src.clone();
+                    }
+                    
+                    const roiCanvas = document.createElement('canvas');
+                    roiCanvas.width = roi.cols;
+                    roiCanvas.height = roi.rows;
+                    cv.imshow(roiCanvas, roi);
+                    
+                    src.delete(); gray.delete(); roi.delete();
+                    
+                    resolve(roiCanvas.toDataURL('image/jpeg', 0.8));
+                };
+                img.src = base64;
+            });
+        }
+
+        // ================= استخراج ميزات MobileNet =================
+        async function extractMobileNetFeatures(base64) {
+            if (!mobilenetModel) return null;
+            
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = async () => {
+                    const tensor = tf.tidy(() => {
+                        return tf.browser.fromPixels(img)
+                            .resizeBilinear([224, 224])
+                            .toFloat()
+                            .div(127.5)
+                            .sub(1)
+                            .expandDims();
+                    });
+                    
+                    // استخراج embeddings من الطبقة قبل الأخيرة
+                    const inference = mobilenetModel.infer(tensor, true);
+                    const embeddings = await inference.data();
+                    
+                    tensor.dispose();
+                    inference.dispose();
+                    
+                    resolve(Array.from(embeddings));
+                };
+                img.src = base64;
+            });
+        }
+
+        // ================= مقارنة MobileNet Embeddings =================
+        function compareMobileNetEmbeddings(embeddings1, embeddings2) {
+            if (!embeddings1 || !embeddings2) return 0;
+            
+            // Cosine Similarity
+            let dotProduct = 0;
+            let norm1 = 0;
+            let norm2 = 0;
+            
+            for (let i = 0; i < embeddings1.length; i++) {
+                dotProduct += embeddings1[i] * embeddings2[i];
+                norm1 += embeddings1[i] * embeddings1[i];
+                norm2 += embeddings2[i] * embeddings2[i];
+            }
+            
+            const similarity = dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+            return Math.max(0, (similarity + 1) * 50); // تحويل إلى 0-100
+        }
+
+        // ================= استخراج الميزات الهندسية =================
+        function extractGeometricFeatures(base64) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const src = cv.imread(canvas);
+                    const gray = new cv.Mat();
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+                    
+                    const aspectRatio = img.width / img.height;
+                    
+                    const circles = new cv.Mat();
+                    cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 45, 75, 40, 20, 100);
+                    const circleCount = circles.cols;
+                    
+                    let totalCircleArea = 0;
+                    const imageArea = img.width * img.height;
+                    for (let i = 0; i < circleCount; i++) {
+                        const radius = circles.data32F[i * 3 + 2];
+                        totalCircleArea += Math.PI * radius * radius;
+                    }
+                    const circleAreaRatio = totalCircleArea / imageArea;
+                    
+                    const edges = new cv.Mat();
+                    cv.Canny(gray, edges, 50, 150);
+                    const edgeDensity = cv.countNonZero(edges) / (img.width * img.height);
+                    
+                    src.delete(); gray.delete(); circles.delete(); edges.delete();
+                    
+                    resolve({
+                        aspectRatio: Math.round(aspectRatio * 100) / 100,
+                        circleCount: circleCount,
+                        circleAreaRatio: Math.round(circleAreaRatio * 1000) / 1000,
+                        edgeDensity: Math.round(edgeDensity * 100) / 100
+                    });
+                };
+                img.src = base64;
+            });
+        }
+
+        // ================= تحليل الألوان =================
+        function extractColorHistogram(base64) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    
+                    const src = cv.imread(canvas);
+                    const hsv = new cv.Mat();
+                    cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+                    
+                    const hist = new cv.Mat();
+                    const channels = [0, 1, 2];
+                    const histSize = [16, 16, 16];
+                    const ranges = [0, 256, 0, 256, 0, 256];
+                    
+                    cv.calcHist([hsv], channels, new cv.Mat(), hist, histSize, ranges);
+                    
+                    // تطبيع الـ histogram
+                    cv.normalize(hist, hist, 0, 1, cv.NORM_MINMAX);
+                    
+                    const histData = [];
+                    for (let i = 0; i < hist.rows; i++) {
+                        for (let j = 0; j < hist.cols; j++) {
+                            histData.push(hist.floatAt(i, j));
+                        }
+                    }
+                    
+                    src.delete(); hsv.delete(); hist.delete();
+                    
+                    resolve(histData);
+                };
+                img.src = base64;
+            });
+        }
+
+        // ================= مقارنة Color Histogram =================
+        function compareColorHistograms(hist1, hist2) {
+            if (!hist1 || !hist2 || hist1.length !== hist2.length) return 0;
+            
+            // Chi-Square Distance
+            let chiSquare = 0;
+            for (let i = 0; i < hist1.length; i++) {
+                const h1 = hist1[i];
+                const h2 = hist2[i];
+                if (h1 + h2 > 0) {
+                    chiSquare += Math.pow(h1 - h2, 2) / (h1 + h2);
+                }
+            }
+            
+            // تحويل إلى نسبة تشابه (0-100)
+            const maxChiSquare = 2.0; // قيمة قصوى تجريبية
+            const similarity = Math.max(0, 100 - (chiSquare / maxChiSquare) * 100);
+            
+            return similarity;
+        }
+
+        // ================= SIFT + RANSAC =================
+        function compareImagesSIFT_RANSAC(mat1, mat2) {
+            try {
+                // محاولة استخدام SIFT (إذا كان متاحاً)
+                let detector;
+                try {
+                    detector = new cv.SIFT();
+                } catch (e) {
+                    // إذا لم يكن SIFT متاحاً، استخدم ORB
+                    detector = new cv.ORB(1000);
+                }
+                
+                const keypoints1 = new cv.KeyPointVector();
+                const keypoints2 = new cv.KeyPointVector();
+                const descriptors1 = new cv.Mat();
+                const descriptors2 = new cv.Mat();
+
+                detector.detectAndCompute(mat1, new cv.Mat(), keypoints1, descriptors1);
+                detector.detectAndCompute(mat2, new cv.Mat(), keypoints2, descriptors2);
+
+                if (descriptors1.rows < 10 || descriptors2.rows < 10) {
+                    keypoints1.delete(); keypoints2.delete();
+                    descriptors1.delete(); descriptors2.delete();
+                    detector.delete();
+                    return 0;
+                }
+
+                // BruteForce Matcher
+                const bf = new cv.BFMatcher(cv.NORM_L2, false);
+                const knnMatches = new cv.DMatchVectorVector();
+                bf.knnMatch(descriptors1, descriptors2, knnMatches, 2);
+
+                // Lowe's Ratio Test
+                const goodMatches = new cv.DMatchVector();
+                for (let i = 0; i < knnMatches.size(); i++) {
+                    const match = knnMatches.get(i);
+                    if (match.size() === 2) {
+                        const m = match.get(0);
+                        const n = match.get(1);
+                        if (m.distance < 0.75 * n.distance) {
+                            goodMatches.push_back(m);
+                        }
+                    }
+                }
+
+                if (goodMatches.size() < 4) {
+                    keypoints1.delete(); keypoints2.delete();
+                    descriptors1.delete(); descriptors2.delete();
+                    knnMatches.delete(); goodMatches.delete();
+                    bf.delete(); detector.delete();
+                    return 0;
+                }
+
+                // RANSAC للتحقق الهندسي
+                const srcPoints = new cv.Mat(goodMatches.size(), 1, cv.CV_32FC2);
+                const dstPoints = new cv.Mat(goodMatches.size(), 1, cv.CV_32FC2);
+                
+                for (let i = 0; i < goodMatches.size(); i++) {
+                    const queryIdx = goodMatches.get(i).queryIdx;
+                    const trainIdx = goodMatches.get(i).trainIdx;
+                    
+                    const pt1 = keypoints1.get(queryIdx).pt;
+                    const pt2 = keypoints2.get(trainIdx).pt;
+                    
+                    srcPoints.data32F[i * 2] = pt1.x;
+                    srcPoints.data32F[i * 2 + 1] = pt1.y;
+                    dstPoints.data32F[i * 2] = pt2.x;
+                    dstPoints.data32F[i * 2 + 1] = pt2.y;
+                }
+
+                const homography = new cv.Mat();
+                const inlierMask = new cv.Mat();
+                
+                cv.findHomography(srcPoints, dstPoints, cv.RANSAC, 5.0, inlierMask);
+
+                // حساب نسبة Inliers
+                let inliers = 0;
+                for (let i = 0; i < inlierMask.rows; i++) {
+                    if (inlierMask.data[i] === 1) inliers++;
+                }
+
+                const inlierRatio = inliers / goodMatches.size();
+                const matchScore = inlierRatio * 100;
+
+                // تنظيف
+                keypoints1.delete(); keypoints2.delete();
+                descriptors1.delete(); descriptors2.delete();
+                knnMatches.delete(); goodMatches.delete();
+                srcPoints.delete(); dstPoints.delete();
+                homography.delete(); inlierMask.delete();
+                bf.delete(); detector.delete();
+
+                return matchScore;
+            } catch (err) {
+                console.error('SIFT/RANSAC error:', err);
+                return 0;
+            }
+        }
+
+        // ================= مقارنة الميزات الهندسية =================
+        function compareGeometricFeatures(features1, features2) {
+            let score = 0;
+
+            const aspectDiff = Math.abs(features1.aspectRatio - features2.aspectRatio);
+            score += Math.max(0, 100 - (aspectDiff * 200)) * 0.3;
+
+            const circleDiff = Math.abs(features1.circleCount - features2.circleCount);
+            score += (circleDiff === 0 ? 100 : Math.max(0, 100 - (circleDiff * 30))) * 0.25;
+
+            const areaDiff = Math.abs(features1.circleAreaRatio - features2.circleAreaRatio);
+            score += Math.max(0, 100 - (areaDiff * 500)) * 0.25;
+
+            const edgeDiff = Math.abs(features1.edgeDensity - features2.edgeDensity);
+            score += Math.max(0, 100 - (edgeDiff * 300)) * 0.2;
+
+            return score;
+        }
 
         // ================= Tab Switching =================
         window.switchTab = (tab) => {
@@ -270,7 +735,7 @@
             document.getElementById(`prev${num}`).style.display = 'block';
             video.style.display = 'none';
             if (streams[num]) streams[num].getTracks().forEach(t => t.stop());
-            const keys = { 1: 'cam', 2: 'btn', 3: 'fin' };
+            const keys = { 1: 'cam', 2: 'btn', 3: 'fin', 4: 'full' };
             adminImages[keys[num]] = dataUrl;
         };
 
@@ -292,7 +757,7 @@
             document.getElementById(`sPrev${num}`).style.display = 'block';
             video.style.display = 'none';
             if (streams[`s${num}`]) streams[`s${num}`].getTracks().forEach(t => t.stop());
-            const keys = { 1: 'cam', 2: 'btn', 3: 'fin' };
+            const keys = { 1: 'cam', 2: 'btn', 3: 'fin', 4: 'full' };
             searchImages[keys[num]] = dataUrl;
         };
 
@@ -317,21 +782,44 @@
             const col = parseInt(document.getElementById('selCol').value);
             const row = parseInt(document.getElementById('selRow').value);
 
-            if (!model || !adminImages.cam || !adminImages.btn || !adminImages.fin) {
-                alert('❌ يرجى ملء جميع الحقول والتقاط الصور الثلاث');
+            if (!model || !adminImages.cam || !adminImages.btn || !adminImages.fin || !adminImages.full) {
+                alert('❌ يرجى التقاط الصور الأربع');
+                return;
+            }
+
+            if (!cvReady || !tfReady) {
+                alert('⏳ انتظر حتى تحميل جميع المكتبات');
                 return;
             }
 
             const btn = document.querySelector('#adminSection .btn-primary');
-            btn.textContent = '⏳ جاري الرفع...';
+            btn.textContent = '⏳ جاري استخراج الميزات...';
             btn.disabled = true;
 
             try {
-                const timestamp = Date.now();
-                const urlCam = await uploadToImgBB(adminImages.cam, `${model}_cam_${timestamp}`);
-                const urlBtn = await uploadToImgBB(adminImages.btn, `${model}_btn_${timestamp}`);
-                const urlFin = await uploadToImgBB(adminImages.fin, `${model}_fin_${timestamp}`);
+                // ضغط الصور
+                const compressedCam = await compressImage(adminImages.cam, 400, 0.6);
+                const compressedBtn = await compressImage(adminImages.btn, 400, 0.6);
+                const compressedFin = await compressImage(adminImages.fin, 400, 0.6);
+                const compressedFull = await compressImage(adminImages.full, 400, 0.6);
 
+                // استخراج الميزات
+                const featuresCam = await extractGeometricFeatures(compressedCam);
+                const featuresFull = await extractGeometricFeatures(compressedFull);
+                const mobilenetCam = await extractMobileNetFeatures(compressedCam);
+                const mobilenetFull = await extractMobileNetFeatures(compressedFull);
+                const colorHistCam = await extractColorHistogram(compressedCam);
+                const colorHistFull = await extractColorHistogram(compressedFull);
+
+                const timestamp = Date.now();
+                
+                // رفع الصور
+                const urlCam = await uploadToImgBB(compressedCam, `${model}_cam_${timestamp}`);
+                const urlBtn = await uploadToImgBB(compressedBtn, `${model}_btn_${timestamp}`);
+                const urlFin = await uploadToImgBB(compressedFin, `${model}_fin_${timestamp}`);
+                const urlFull = await uploadToImgBB(compressedFull, `${model}_full_${timestamp}`);
+
+                // حفظ في Firestore
                 await addDoc(collection(db, 'cases'), {
                     device_model: model,
                     case_type: type,
@@ -339,37 +827,53 @@
                     quantity: qty,
                     location: { column: col, row: row },
                     images: { 
-                        camera: urlCam, 
+                    camera: urlCam, 
                         buttons: urlBtn, 
                         fingerprint: urlFin,
-                        // حفظ base64 محلياً للمطابقة السريعة
-                        camera_base64: adminImages.cam,
-                        buttons_base64: adminImages.btn,
-                        fingerprint_base64: adminImages.fin
+                        full: urlFull
+                    },
+                    features: {
+                        geometric: { camera: featuresCam, full: featuresFull },
+                        mobilenet: { camera: mobilenetCam, full: mobilenetFull },
+                        colorHist: { camera: colorHistCam, full: colorHistFull }
                     },
                     added_at: new Date().toISOString()
                 });
 
-                alert(`✅ تم الحفظ!\nالموقع: عمود ${col} - صف ${row} (العدد: ${qty})`);
+                alert(`✅ تم الحفظ بنجاح!\nالموقع: عمود ${col} - صف ${row}\nتم استخراج وحفظ جميع الميزات المتقدمة.`);
                 
+                // إعادة تعيين النموذج
                 document.getElementById('deviceModel').value = '';
                 document.getElementById('casePrice').value = '';
                 document.getElementById('caseQuantity').value = '1';
-                adminImages = { cam: null, btn: null, fin: null };
+                adminImages = { cam: null, btn: null, fin: null, full: null };
                 document.querySelectorAll('#adminSection .preview-img').forEach(img => {
                     img.style.display = 'none';
                     img.previousElementSibling.style.display = 'block';
                 });
                 renderGrid();
             } catch (err) {
+                console.error('Save error:', err);
                 alert('❌ خطأ: ' + err.message);
             } finally {
-                btn.textContent = '💾 حفظ الكفر';
+                btn.textContent = '💾 حفظ الكفر (مع استخراج الميزات)';
                 btn.disabled = false;
             }
         };
 
-        // ================= Render Grid =================
+        // ================= حذف كفر =================
+        window.deleteCase = async (docId) => {
+            if (!confirm('هل أنت متأكد من حذف هذا الكفر نهائياً؟')) return;
+            try {
+                await deleteDoc(doc(db, 'cases', docId));
+                alert('✅ تم الحذف بنجاح');
+                renderGrid();
+            } catch (err) {
+                alert('❌ خطأ في الحذف: ' + err.message);
+            }
+        };
+
+        // ================= عرض شبكة المخزن =================
         window.renderGrid = async () => {
             const cols = parseInt(document.getElementById('totalCols').value) || 5;
             const rows = parseInt(document.getElementById('totalRows').value) || 5;
@@ -387,11 +891,11 @@
             const snapshot = await getDocs(collection(db, 'cases'));
             const locationMap = {};
             
-            snapshot.forEach(doc => {
-                const d = doc.data();
-                const key = `${d.location.column}-${d.location.row}`;
+            snapshot.forEach(d => {
+                const data = d.data();
+                const key = `${data.location.column}-${data.location.row}`;
                 if (!locationMap[key]) locationMap[key] = [];
-                locationMap[key].push(d);
+                locationMap[key].push({ id: d.id, ...data });
             });
 
             for (let r = 1; r <= rows; r++) {
@@ -405,9 +909,14 @@
                     if (casesInCell.length > 0) {
                         const totalQty = casesInCell.reduce((sum, item) => sum + (item.quantity || 1), 0);
                         const modelNames = casesInCell.map(item => item.device_model).join(' + ');
+                        const deleteButtons = casesInCell.map(item => 
+                            `<button class="delete-btn" onclick="deleteCase('${item.id}')" title="حذف ${item.device_model}">×</button>`
+                        ).join('');
+                        
                         cell.innerHTML = `
+                            ${deleteButtons}
                             <div class="loc">عمود ${c} | صف ${r}</div>
-                            <div class="device" style="font-size:13px;">${modelNames}</div>
+                            <div class="device" style="font-size:12px;">${modelNames}</div>
                             <div class="count-badge">العدد: ${totalQty}</div>
                         `;
                     } else {
@@ -418,127 +927,33 @@
             }
         };
 
-        // ================= OpenCV Image Matching =================
-        function base64ToMat(base64Data) {
-            return new Promise((resolve) => {
+        // ================= تحميل صورة من URL للمعالجة =================
+        function loadImageAsBase64(url) {
+            return new Promise((resolve, reject) => {
                 const img = new Image();
+                img.crossOrigin = 'anonymous'; // مهم لتجنب مشاكل CORS
                 img.onload = () => {
                     const canvas = document.createElement('canvas');
                     canvas.width = img.width;
                     canvas.height = img.height;
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0);
-                    const src = cv.imread(canvas);
-                    const gray = new cv.Mat();
-                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-                    // تطبيق Gaussian Blur لتقليل الضوضاء
-                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-                    src.delete();
-                    resolve(gray);
+                    resolve(canvas.toDataURL('image/jpeg', 0.8));
                 };
-                img.src = base64Data;
+                img.onerror = reject;
+                img.src = url;
             });
-        }
-
-        function compareImagesORB(mat1, mat2) {
-            // كشف النقاط المميزة باستخدام ORB
-            const orb = new cv.ORB(1000); // 1000 نقطة مميزة
-            const keypoints1 = new cv.KeyPointVector();
-            const keypoints2 = new cv.KeyPointVector();
-            const descriptors1 = new cv.Mat();
-            const descriptors2 = new cv.Mat();
-
-            orb.detectAndCompute(mat1, new cv.Mat(), keypoints1, descriptors1);
-            orb.detectAndCompute(mat2, new cv.Mat(), keypoints2, descriptors2);
-
-            if (descriptors1.rows < 5 || descriptors2.rows < 5) {
-                // لا توجد ميزات كافية
-                keypoints1.delete(); keypoints2.delete();
-                descriptors1.delete(); descriptors2.delete();
-                orb.delete();
-                return 0;
-            }
-
-            // المطابقة باستخدام BruteForce مع Hamming distance
-            const bf = new cv.BFMatcher(cv.NORM_HAMMING, true);
-            const matches = new cv.DMatchVector();
-            bf.match(descriptors1, descriptors2, matches);
-
-            // حساب نسبة التطابق
-            let goodMatches = 0;
-            const totalMatches = matches.size();
             
-            // Lowe's ratio test (مبسط)
-            for (let i = 0; i < totalMatches; i++) {
-                const match = matches.get(i);
-                if (match.distance < 60) { // حد المسافة
-                    goodMatches++;
-                }
-            }
-
-            const matchPercentage = totalMatches > 0 ? (goodMatches / Math.min(descriptors1.rows, descriptors2.rows)) * 100 : 0;
-
-            // تنظيف الذاكرة
-            keypoints1.delete(); keypoints2.delete();
-            descriptors1.delete(); descriptors2.delete();
-            matches.delete();
-            bf.delete();
-            orb.delete();
-
-            return Math.min(100, matchPercentage);
         }
-
-        async function calculateMatchScore(queryImages, storedImages) {
-            const scores = [];
-            
-            // مقارنة الكاميرا
-            if (queryImages.cam && storedImages.camera_base64) {
-                const mat1 = await base64ToMat(queryImages.cam);
-                const mat2 = await base64ToMat(storedImages.camera_base64);
-                const score = compareImagesORB(mat1, mat2);
-                scores.push(score);
-                mat1.delete(); mat2.delete();
-            }
-
-            // مقارنة الأزرار
-            if (queryImages.btn && storedImages.buttons_base64) {
-                const mat1 = await base64ToMat(queryImages.btn);
-                const mat2 = await base64ToMat(storedImages.buttons_base64);
-                const score = compareImagesORB(mat1, mat2);
-                scores.push(score);
-                mat1.delete(); mat2.delete();
-            }
-
-            // مقارنة البصمة
-            if (queryImages.fin && storedImages.fingerprint_base64) {
-                const mat1 = await base64ToMat(queryImages.fin);
-                const mat2 = await base64ToMat(storedImages.fingerprint_base64);
-                const score = compareImagesORB(mat1, mat2);
-                scores.push(score);
-                mat1.delete(); mat2.delete();
-            }
-
-            // المتوسط المرجح (الكاميرا 40%، الأزرار 35%، البصمة 25%)
-            if (scores.length === 0) return 0;
-            const weights = [0.4, 0.35, 0.25];
-            let weightedSum = 0;
-            let totalWeight = 0;
-            for (let i = 0; i < scores.length; i++) {
-                weightedSum += scores[i] * weights[i];
-                totalWeight += weights[i];
-            }
-            return totalWeight > 0 ? weightedSum / totalWeight : 0;
-        }
-
-        // ================= Search with OpenCV =================
+           // ================= البحث المتقدم (الدمج النهائي) =================
         window.searchCase = async () => {
-            if (!cvReady) {
-                alert('⏳ OpenCV.js لم يتم تحميله بعد. انتظر قليلاً...');
+            if (!cvReady || !tfReady) {
+                alert('⏳ انتظر حتى تحميل جميع المكتبات (OpenCV + TensorFlow)');
                 return;
             }
 
-            if (!searchImages.cam || !searchImages.btn || !searchImages.fin) {
-                alert('❌ يرجى التقاط الصور الثلاث للجهاز');
+            if (!searchImages.cam || !searchImages.btn || !searchImages.fin || !searchImages.full) {
+                alert('❌ يرجى التقاط الصور الأربع للجهاز');
                 return;
             }
 
@@ -553,33 +968,109 @@
             searchBtn.disabled = true;
 
             try {
+                loadingText.textContent = 'جاري معالجة صور البحث (تصحيح المنظور + ROI)...';
+                
+                // 1. معالجة صور البحث مسبقاً
+                const correctedSearchCam = await correctPerspective(searchImages.cam);
+                const correctedSearchFull = await correctPerspective(searchImages.full);
+                
+                const roiSearchCam = await extractROI(correctedSearchCam, 'camera');
+                const roiSearchFull = await extractROI(correctedSearchFull, 'full');
+
+                // استخراج ميزات صور البحث
+                const queryGeoCam = await extractGeometricFeatures(roiSearchCam);
+                const queryGeoFull = await extractGeometricFeatures(roiSearchFull);
+                const queryHistCam = await extractColorHistogram(roiSearchCam);
+                const queryHistFull = await extractColorHistogram(roiSearchFull);
+                const queryNetCam = await extractMobileNetFeatures(roiSearchCam);
+                const queryNetFull = await extractMobileNetFeatures(roiSearchFull);
+
                 const snapshot = await getDocs(collection(db, 'cases'));
                 const results = [];
                 const totalDocs = snapshot.size;
                 let processed = 0;
 
-                for (const doc of snapshot.docs) {
-                    const data = doc.data();
-                    loadingText.textContent = `جاري المطابقة... (${processed + 1}/${totalDocs})`;
-                    progressFill.style.width = `${((processed + 1) / totalDocs) * 100}%`;
+                for (const d of snapshot.docs) {
+                    const data = d.data();
+                    processed++;
+                    loadingText.textContent = `جاري المطابقة المتقدمة... (${processed}/${totalDocs})`;
+                    progressFill.style.width = `${(processed / totalDocs) * 100}%`;
 
-                    // حساب نسبة التطابق باستخدام OpenCV
-                    const matchScore = await calculateMatchScore(searchImages, data.images);
+                    try {
+                        // 2. Pre-Filtering (التصفية المسبقة السريعة)
+                        // إذا كان عدد الكاميرات مختلفاً تماماً، نعطيه درجة منخفضة جداً فوراً
+                        const camDiff = Math.abs(queryGeoCam.circleCount - data.features.geometric.camera.circleCount);
+                        if (camDiff > 1) {
+                            // تخطي المعالجة الثقيلة وتوفيراً للوقت
+                            continue; 
+                        }
 
-                    if (matchScore > 15) { // حد أدنى للتطابق
-                        results.push({
-                            id: doc.id,
-                            ...data,
-                            matchScore: Math.round(matchScore)
-                        });
+                        // 3. تحميل ومعالجة الصورة المخزنة
+                        const storedCamBase64 = await loadImageAsBase64(data.images.camera);
+                        const storedFullBase64 = await loadImageAsBase64(data.images.full);
+                        
+                        const correctedStoredCam = await correctPerspective(storedCamBase64);
+                        const correctedStoredFull = await correctPerspective(storedFullBase64);
+                        
+                        const roiStoredCam = await extractROI(correctedStoredCam, 'camera');
+                        const roiStoredFull = await extractROI(correctedStoredFull, 'full');
+
+                        // 4. حساب الدرجات الفرعية
+                        
+                        // أ) MobileNet Embeddings (40%)
+                        const netScoreCam = compareMobileNetEmbeddings(queryNetCam, data.features.mobilenet.camera);
+                        const netScoreFull = compareMobileNetEmbeddings(queryNetFull, data.features.mobilenet.full);
+                        const finalNetScore = (netScoreCam + netScoreFull) / 2;
+
+                        // ب) SIFT + RANSAC (35%)
+                        const matQueryCam = await base64ToMat(roiSearchCam);
+                        const matStoredCam = await base64ToMat(roiStoredCam);
+                        const siftScoreCam = compareImagesSIFT_RANSAC(matQueryCam, matStoredCam);
+                        matQueryCam.delete(); matStoredCam.delete();
+
+                        const matQueryFull = await base64ToMat(roiSearchFull);
+                        const matStoredFull = await base64ToMat(roiStoredFull);
+                        const siftScoreFull = compareImagesSIFT_RANSAC(matQueryFull, matStoredFull);
+                        matQueryFull.delete(); matStoredFull.delete();
+                        
+                        const finalSiftScore = (siftScoreCam + siftScoreFull) / 2;
+
+                        // ج) Color Histogram (15%)
+                        const histScoreCam = compareColorHistograms(queryHistCam, data.features.colorHist.camera);
+                        const histScoreFull = compareColorHistograms(queryHistFull, data.features.colorHist.full);
+                        const finalHistScore = (histScoreCam + histScoreFull) / 2;
+
+                        // د) Geometric Features (10%)
+                        const geoScoreCam = compareGeometricFeatures(queryGeoCam, data.features.geometric.camera);
+                        const geoScoreFull = compareGeometricFeatures(queryGeoFull, data.features.geometric.full);
+                        const finalGeoScore = (geoScoreCam + geoScoreFull) / 2;
+
+                        // 5. الدرجة النهائية المرجحة
+                        const finalScore = (finalNetScore * 0.40) + (finalSiftScore * 0.35) + (finalHistScore * 0.15) + (finalGeoScore * 0.10);
+
+                        if (finalScore > 25) { // حد أدنى معقول للعرض
+                            results.push({
+                                id: d.id,
+                                ...data,
+                                matchScore: Math.round(finalScore),
+                                breakdown: {
+                                    net: Math.round(finalNetScore),
+                                    sift: Math.round(finalSiftScore),
+                                    hist: Math.round(finalHistScore),
+                                    geo: Math.round(finalGeoScore)
+                                }
+                            });
+                        }
+                    } catch (err) {
+                        console.error('Error processing case:', data.device_model, err);
+                        // الاستمرار مع العنصر التالي حتى لو فشل واحد
                     }
 
-                    processed++;
-                    // تأخير صغير لعدم تجميد المتصفح
-                    await new Promise(resolve => setTimeout(resolve, 10));
+                    // تأخير صغير لمنع تجميد المتصفح
+                    await new Promise(resolve => setTimeout(resolve, 20));
                 }
 
-                // ترتيب حسب نسبة التطابق
+                // ترتيب النتائج
                 results.sort((a, b) => b.matchScore - a.matchScore);
 
                 // عرض النتائج
@@ -587,16 +1078,16 @@
                 resultsGrid.innerHTML = '';
 
                 if (results.length === 0) {
-                    resultsGrid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; color: #666;">لا توجد نتائج متطابقة. جرب تصوير أوضح.</p>';
+                    resultsGrid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; color: #666; padding: 20px;">لا توجد نتائج متطابقة بدقة كافية. جرب تصويراً أوضح أو من زاوية مختلفة.</p>';
                 } else {
                     const typeNames = { silicone: 'سيليكون', clear: 'شفاف', armor: 'حماية قوية', wallet: 'محفظة', leather: 'جلد' };
-                    results.forEach(res => {
+                    results.slice(0, 8).forEach(res => { // عرض أفضل 8 نتائج فقط
                         const card = document.createElement('div');
                         card.className = 'result-card';
                         
                         let scoreClass = 'low';
-                        if (res.matchScore >= 60) scoreClass = 'high';
-                        else if (res.matchScore >= 35) scoreClass = 'medium';
+                        if (res.matchScore >= 65) scoreClass = 'high';
+                        else if (res.matchScore >= 45) scoreClass = 'medium';
 
                         card.innerHTML = `
                             <img src="${res.images.camera}" alt="${res.device_model}">
@@ -605,7 +1096,13 @@
                             <div class="location-badge">📍 عمود ${res.location.column} - صف ${res.location.row}</div>
                             <div class="price">${res.price} دينار</div>
                             <div style="font-size:13px; color:#555;">الكمية: ${res.quantity || 1}</div>
-                            <div class="match-score ${scoreClass}">نسبة التطابق: ${res.matchScore}%</div>
+                            <div class="match-score ${scoreClass}">
+                                الدقة النهائية: ${res.matchScore}%
+                            </div>
+                            <div class="score-breakdown">
+                                🧠 ذكاء: ${res.breakdown.net}% | 📐 SIFT/RANSAC: ${res.breakdown.sift}%<br>
+                                🎨 ألوان: ${res.breakdown.hist}% | 📏 هندسي: ${res.breakdown.geo}%
+                            </div>
                         `;
                         resultsGrid.appendChild(card);
                     });
@@ -615,7 +1112,7 @@
                 resultsArea.style.display = 'block';
 
             } catch (err) {
-                console.error(err);
+                console.error('Search error:', err);
                 alert('❌ خطأ في البحث: ' + err.message);
                 loading.style.display = 'none';
             } finally {
@@ -623,9 +1120,32 @@
             }
         };
 
+        // ================= دالة مساعدة لـ OpenCV Mat =================
+        function base64ToMat(base64Data) {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0);
+                    const src = cv.imread(canvas);
+                    const gray = new cv.Mat();
+                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+                    src.delete();
+                    resolve(gray);
+                };
+                img.src = base64Data;
+            });
+        }
+
+        // ================= التشغيل الأولي =================
         window.addEventListener('load', () => {
             renderGrid();
         });
     </script>
 </body>
-</html>
+</html>     
+        
