@@ -261,940 +261,588 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.0/dist/mobilenet.min.js"></script>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyDNWl0rRVoIGIQjva3Q9wOvv4KNFAVLTzQ",
-            authDomain: "mi2-2-92089.firebaseapp.com",
-            projectId: "mi2-2-92089",
-            storageBucket: "mi2-2-92089.firebasestorage.app",
-            messagingSenderId: "533547165192",
-            appId: "1:533547165192:web:5cc4221f3710ae855513bd"
-        };
+    const firebaseConfig = {
+        apiKey: "AIzaSyDNWl0rRVoIGIQjva3Q9wOvv4KNFAVLTzQ",
+        authDomain: "mi2-2-92089.firebaseapp.com",
+        projectId: "mi2-2-92089",
+        storageBucket: "mi2-2-92089.firebasestorage.app",
+        messagingSenderId: "533547165192",
+        appId: "1:533547165192:web:5cc4221f3710ae855513bd"
+    };
 
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-        const IMGBB_API_KEY = '4e309a214db91e5ddb1e3238e2930f50';
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const IMGBB_API_KEY = '4e309a214db91e5ddb1e3238e2930f50';
 
-        let streams = {};
-        let adminImages = { cam: null, btn: null, fin: null, full: null };
-        let searchImages = { cam: null, btn: null, fin: null, full: null };
-                let cvReady = false;
-        let tfReady = false;
-        let mobilenetModel = null;
+    let streams = {};
+    let adminImages = { cam: null, btn: null, fin: null, full: null };
+    let searchImages = { cam: null, btn: null, fin: null, full: null };
+    let cvReady = false;
+    let tfReady = false;
+    let mobilenetModel = null;
 
-        // ================= تهيئة OpenCV بشكل آمن (بدون أخطاء) =================
-        function initOpenCV() {
-            if (typeof cv !== 'undefined' && cv.onRuntimeInitialized) {
-                cv.onRuntimeInitialized = () => {
-                    cvReady = true;
-                    const statusEl = document.getElementById('opencvStatus');
-                    if (statusEl) {
-                        statusEl.className = 'status-item ready';
-                        statusEl.textContent = '✅ OpenCV.js جاهز';
-                    }
-                    console.log('✅ OpenCV.js Runtime Initialized Successfully!');
-                };
-            } else {
-                // إذا لم تكن المكتبة محملة بعد، انتظر 100 جزء من الثانية وحاول مجدداً
-                setTimeout(initOpenCV, 100);
-            }
+    // ================= 1. تهيئة OpenCV بشكل آمن =================
+    function initOpenCV() {
+        if (typeof cv !== 'undefined' && cv.onRuntimeInitialized) {
+            cv.onRuntimeInitialized = () => {
+                cvReady = true;
+                const el = document.getElementById('opencvStatus');
+                if (el) { el.className = 'status-item ready'; el.textContent = '✅ OpenCV.js جاهز'; }
+                console.log('✅ OpenCV.js Runtime Initialized!');
+            };
+        } else {
+            setTimeout(initOpenCV, 100);
         }
-        // ابدأ فحص التحميل فوراً
-        initOpenCV();
+    }
+    initOpenCV();
 
-        // ================= تهيئة TensorFlow + MobileNet =================
-        async function loadMobileNet() {
-            try {
-                const statusTf = document.getElementById('tfStatus');
-                const statusMb = document.getElementById('mobilenetStatus');
+    // ================= 2. تهيئة TensorFlow + MobileNet (مرة واحدة فقط) =================
+    async function loadMobileNet() {
+        try {
+            const statusTf = document.getElementById('tfStatus');
+            const statusMb = document.getElementById('mobilenetStatus');
+            if(statusTf) statusTf.textContent = '⏳ جاري تحميل TensorFlow...';
+            
+            mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
+            tfReady = true;
+            
+            if(statusTf) { statusTf.className = 'status-item ready'; statusTf.textContent = '✅ TensorFlow.js جاهز'; }
+            if(statusMb) { statusMb.className = 'status-item ready'; statusMb.textContent = '✅ MobileNet جاهز'; }
+            console.log('✅ MobileNet Model Loaded Successfully!');
+        } catch (err) {
+            console.error('MobileNet load error:', err);
+            const statusTf = document.getElementById('tfStatus');
+            const statusMb = document.getElementById('mobilenetStatus');
+            if(statusTf) { statusTf.className = 'status-item error'; statusTf.textContent = '❌ خطأ في TensorFlow'; }
+            if(statusMb) { statusMb.className = 'status-item error'; statusMb.textContent = '❌ خطأ في MobileNet'; }
+        }
+    }
+    loadMobileNet();
+
+    // ================= 3. دوال المعالجة المساعدة =================
+    function compressImage(base64, maxWidth = 400, quality = 0.6) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let width = img.width, height = img.height;
+                if (width > maxWidth) { height = (height * maxWidth) / width; width = maxWidth; }
+                canvas.width = width; canvas.height = height;
+                canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                resolve(canvas.toDataURL('image/jpeg', quality));
+            };
+            img.src = base64;
+        });
+    }
+
+    function correctPerspective(base64) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                const src = cv.imread(canvas);
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+                const correctedCanvas = document.createElement('canvas');
+                cv.imshow(correctedCanvas, gray);
+                src.delete(); gray.delete();
+                resolve(correctedCanvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = base64;
+        });
+    }
+
+    function extractROI(base64, type) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                const src = cv.imread(canvas);
+                let roi = src.clone();
+                const roiCanvas = document.createElement('canvas');
+                cv.imshow(roiCanvas, roi);
+                src.delete(); roi.delete();
+                resolve(roiCanvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.src = base64;
+        });
+    }
+
+    async function extractMobileNetFeatures(base64) {
+        if (!mobilenetModel) return null;
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = async () => {
+                const tensor = tf.tidy(() => tf.browser.fromPixels(img).resizeBilinear([224, 224]).toFloat().div(127.5).sub(1).expandDims());
+                const inference = mobilenetModel.infer(tensor, true);
+                const embeddings = await inference.data();
+                tensor.dispose(); inference.dispose();
+                resolve(Array.from(embeddings));
+            };
+            img.src = base64;
+        });
+    }
+
+    function compareMobileNetEmbeddings(e1, e2) {
+        if (!e1 || !e2) return 0;
+        let dot = 0, n1 = 0, n2 = 0;
+        for (let i = 0; i < e1.length; i++) { dot += e1[i] * e2[i]; n1 += e1[i] ** 2; n2 += e2[i] ** 2; }
+        return Math.max(0, ((dot / (Math.sqrt(n1) * Math.sqrt(n2))) + 1) * 50);
+    }
+
+    function extractGeometricFeatures(base64) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                const src = cv.imread(canvas);
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
                 
-                if(statusTf) statusTf.textContent = '⏳ جاري تحميل TensorFlow...';
+                const circles = new cv.Mat();
+                cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 45, 75, 40, 20, 100);
                 
-                mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
-                tfReady = true;
+                const edges = new cv.Mat();
+                cv.Canny(gray, edges, 50, 150);
                 
-                if(statusTf) {
-                    statusTf.className = 'status-item ready';
-                    statusTf.textContent = '✅ TensorFlow.js جاهز';
-                }
-                if(statusMb) {
-                    statusMb.className = 'status-item ready';
-                    statusMb.textContent = '✅ MobileNet جاهز';
-                }
-                console.log('✅ MobileNet Model Loaded Successfully!');
-            } catch (err) {
-                console.error('MobileNet load error:', err);
-                const statusTf = document.getElementById('tfStatus');
-                const statusMb = document.getElementById('mobilenetStatus');
-                if(statusTf) {
-                    statusTf.className = 'status-item error';
-                    statusTf.textContent = '❌ خطأ في TensorFlow';
-                }
-                if(statusMb) {
-                    statusMb.className = 'status-item error';
-                    statusMb.textContent = '❌ خطأ في MobileNet';
-                }
-            }
-        }
-        // ابدأ تحميل MobileNet فوراً
-        loadMobileNet();
+                resolve({
+                    aspectRatio: Math.round((img.width / img.height) * 100) / 100,
+                    circleCount: circles.cols,
+                    edgeDensity: Math.round((cv.countNonZero(edges) / (img.width * img.height)) * 100) / 100
+                });
+                src.delete(); gray.delete(); circles.delete(); edges.delete();
+            };
+            img.src = base64;
+        });
+    }
 
-        // ================= TensorFlow + MobileNet Ready =================
-        async function loadMobileNet() {
-            try {
-                mobilenetModel = await mobilenet.load({ version: 2, alpha: 1.0 });
-                tfReady = true;
-                document.getElementById('tfStatus').className = 'status-item ready';
-                document.getElementById('tfStatus').textContent = '✅ TensorFlow.js';
-                document.getElementById('mobilenetStatus').className = 'status-item ready';
-                document.getElementById('mobilenetStatus').textContent = '✅ MobileNet';
-            } catch (err) {
-                console.error('MobileNet load error:', err);
-                document.getElementById('tfStatus').className = 'status-item error';
-                document.getElementById('tfStatus').textContent = '❌ TensorFlow';
-                document.getElementById('mobilenetStatus').className = 'status-item error';
-                document.getElementById('mobilenetStatus').textContent = '❌ MobileNet';
-            }
-        }
-        loadMobileNet();
+    function extractColorHistogram(base64) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                const src = cv.imread(canvas);
+                const hsv = new cv.Mat();
+                cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
+                const hist = new cv.Mat();
+                cv.calcHist([hsv], [0, 1, 2], new cv.Mat(), hist, [16, 16, 16], [0, 256, 0, 256, 0, 256]);
+                cv.normalize(hist, hist, 0, 1, cv.NORM_MINMAX);
+                const data = [];
+                for (let i = 0; i < hist.rows; i++) for (let j = 0; j < hist.cols; j++) data.push(hist.floatAt(i, j));
+                src.delete(); hsv.delete(); hist.delete();
+                resolve(data);
+            };
+            img.src = base64;
+        });
+    }
 
-        // ================= ضغط الصور =================
-        function compressImage(base64, maxWidth = 400, quality = 0.6) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    
-                    if (width > maxWidth) {
-                        height = (height * maxWidth) / width;
-                        width = maxWidth;
-                    }
-                    
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-                    
-                    const compressedBase64 = canvas.toDataURL('image/jpeg', quality);
-                    resolve(compressedBase64);
-                };
-                img.src = base64;
-            });
-        }
+    function compareColorHistograms(h1, h2) {
+        if (!h1 || !h2 || h1.length !== h2.length) return 0;
+        let chi = 0;
+        for (let i = 0; i < h1.length; i++) if (h1[i] + h2[i] > 0) chi += ((h1[i] - h2[i]) ** 2) / (h1[i] + h2[i]);
+        return Math.max(0, 100 - (chi / 2.0) * 100);
+    }
 
-        // ================= تصحيح المنظور =================
-        function correctPerspective(base64) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    
-                    const src = cv.imread(canvas);
-                    const gray = new cv.Mat();
-                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-                    
-                    // كشف الحواف
-                    const edges = new cv.Mat();
-                    cv.Canny(gray, edges, 50, 150);
-                    
-                    // إيجاد الخطوط
-                    const lines = new cv.Mat();
-                    cv.HoughLinesP(edges, lines, 1, Math.PI / 180, 50, 50, 10);
-                    
-                    // إذا وجدنا خطوط كافية، نطبق تصحيح بسيط
-                    if (lines.rows > 4) {
-                        // تطبيق perspective transform مبسط
-                        const corrected = src.clone();
-                        src.delete(); gray.delete(); edges.delete(); lines.delete();
-                        
-                        const correctedCanvas = document.createElement('canvas');
-                        correctedCanvas.width = corrected.cols;
-                        correctedCanvas.height = corrected.rows;
-                        cv.imshow(correctedCanvas, corrected);
-                        corrected.delete();
-                        
-                        resolve(correctedCanvas.toDataURL('image/jpeg', 0.8));
-                    } else {
-                        src.delete(); gray.delete(); edges.delete(); lines.delete();
-                        resolve(base64); // إرجاع الصورة الأصلية
-                    }
-                };
-                img.src = base64;
-            });
-        }
-
-        // ================= استخراج ROI =================
-        function extractROI(base64, type) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    
-                    const src = cv.imread(canvas);
-                    const gray = new cv.Mat();
-                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-                    
-                    let roi;
-                    
-                    if (type === 'camera') {
-                        // التركيز على الجزء العلوي (حيث الكاميرات عادة)
-                        const height = src.rows;
-                        const width = src.cols;
-                        roi = src.roi(new cv.Rect(width * 0.2, 0, width * 0.6, height * 0.5));
-                    } else if (type === 'full') {
-                        // التركيز على المركز
-                        const height = src.rows;
-                        const width = src.cols;
-                        roi = src.roi(new cv.Rect(width * 0.1, height * 0.1, width * 0.8, height * 0.8));
-                    } else {
-                        roi = src.clone();
-                    }
-                    
-                    const roiCanvas = document.createElement('canvas');
-                    roiCanvas.width = roi.cols;
-                    roiCanvas.height = roi.rows;
-                    cv.imshow(roiCanvas, roi);
-                    
-                    src.delete(); gray.delete(); roi.delete();
-                    
-                    resolve(roiCanvas.toDataURL('image/jpeg', 0.8));
-                };
-                img.src = base64;
-            });
-        }
-
-        // ================= استخراج ميزات MobileNet =================
-        async function extractMobileNetFeatures(base64) {
-            if (!mobilenetModel) return null;
-            
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = async () => {
-                    const tensor = tf.tidy(() => {
-                        return tf.browser.fromPixels(img)
-                            .resizeBilinear([224, 224])
-                            .toFloat()
-                            .div(127.5)
-                            .sub(1)
-                            .expandDims();
-                    });
-                    
-                    // استخراج embeddings من الطبقة قبل الأخيرة
-                    const inference = mobilenetModel.infer(tensor, true);
-                    const embeddings = await inference.data();
-                    
-                    tensor.dispose();
-                    inference.dispose();
-                    
-                    resolve(Array.from(embeddings));
-                };
-                img.src = base64;
-            });
-        }
-
-        // ================= مقارنة MobileNet Embeddings =================
-        function compareMobileNetEmbeddings(embeddings1, embeddings2) {
-            if (!embeddings1 || !embeddings2) return 0;
-            
-            // Cosine Similarity
-            let dotProduct = 0;
-            let norm1 = 0;
-            let norm2 = 0;
-            
-            for (let i = 0; i < embeddings1.length; i++) {
-                dotProduct += embeddings1[i] * embeddings2[i];
-                norm1 += embeddings1[i] * embeddings1[i];
-                norm2 += embeddings2[i] * embeddings2[i];
-            }
-            
-            const similarity = dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
-            return Math.max(0, (similarity + 1) * 50); // تحويل إلى 0-100
-        }
-
-        // ================= استخراج الميزات الهندسية =================
-        function extractGeometricFeatures(base64) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    
-                    const src = cv.imread(canvas);
-                    const gray = new cv.Mat();
-                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-                    
-                    const aspectRatio = img.width / img.height;
-                    
-                    const circles = new cv.Mat();
-                    cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT, 1, 45, 75, 40, 20, 100);
-                    const circleCount = circles.cols;
-                    
-                    let totalCircleArea = 0;
-                    const imageArea = img.width * img.height;
-                    for (let i = 0; i < circleCount; i++) {
-                        const radius = circles.data32F[i * 3 + 2];
-                        totalCircleArea += Math.PI * radius * radius;
-                    }
-                    const circleAreaRatio = totalCircleArea / imageArea;
-                    
-                    const edges = new cv.Mat();
-                    cv.Canny(gray, edges, 50, 150);
-                    const edgeDensity = cv.countNonZero(edges) / (img.width * img.height);
-                    
-                    src.delete(); gray.delete(); circles.delete(); edges.delete();
-                    
-                    resolve({
-                        aspectRatio: Math.round(aspectRatio * 100) / 100,
-                        circleCount: circleCount,
-                        circleAreaRatio: Math.round(circleAreaRatio * 1000) / 1000,
-                        edgeDensity: Math.round(edgeDensity * 100) / 100
-                    });
-                };
-                img.src = base64;
-            });
-        }
-
-        // ================= تحليل الألوان =================
-        function extractColorHistogram(base64) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    
-                    const src = cv.imread(canvas);
-                    const hsv = new cv.Mat();
-                    cv.cvtColor(src, hsv, cv.COLOR_RGBA2RGB);
-                    
-                    const hist = new cv.Mat();
-                    const channels = [0, 1, 2];
-                    const histSize = [16, 16, 16];
-                    const ranges = [0, 256, 0, 256, 0, 256];
-                    
-                    cv.calcHist([hsv], channels, new cv.Mat(), hist, histSize, ranges);
-                    
-                    // تطبيع الـ histogram
-                    cv.normalize(hist, hist, 0, 1, cv.NORM_MINMAX);
-                    
-                    const histData = [];
-                    for (let i = 0; i < hist.rows; i++) {
-                        for (let j = 0; j < hist.cols; j++) {
-                            histData.push(hist.floatAt(i, j));
-                        }
-                    }
-                    
-                    src.delete(); hsv.delete(); hist.delete();
-                    
-                    resolve(histData);
-                };
-                img.src = base64;
-            });
-        }
-
-        // ================= مقارنة Color Histogram =================
-        function compareColorHistograms(hist1, hist2) {
-            if (!hist1 || !hist2 || hist1.length !== hist2.length) return 0;
-            
-            // Chi-Square Distance
-            let chiSquare = 0;
-            for (let i = 0; i < hist1.length; i++) {
-                const h1 = hist1[i];
-                const h2 = hist2[i];
-                if (h1 + h2 > 0) {
-                    chiSquare += Math.pow(h1 - h2, 2) / (h1 + h2);
-                }
-            }
-            
-            // تحويل إلى نسبة تشابه (0-100)
-            const maxChiSquare = 2.0; // قيمة قصوى تجريبية
-            const similarity = Math.max(0, 100 - (chiSquare / maxChiSquare) * 100);
-            
-            return similarity;
-        }
-
-        // ================= SIFT + RANSAC =================
-        function compareImagesSIFT_RANSAC(mat1, mat2) {
-            try {
-                // محاولة استخدام SIFT (إذا كان متاحاً)
-                let detector;
-                try {
-                    detector = new cv.SIFT();
-                } catch (e) {
-                    // إذا لم يكن SIFT متاحاً، استخدم ORB
-                    detector = new cv.ORB(1000);
-                }
-                
-                const keypoints1 = new cv.KeyPointVector();
-                const keypoints2 = new cv.KeyPointVector();
-                const descriptors1 = new cv.Mat();
-                const descriptors2 = new cv.Mat();
-
-                detector.detectAndCompute(mat1, new cv.Mat(), keypoints1, descriptors1);
-                detector.detectAndCompute(mat2, new cv.Mat(), keypoints2, descriptors2);
-
-                if (descriptors1.rows < 10 || descriptors2.rows < 10) {
-                    keypoints1.delete(); keypoints2.delete();
-                    descriptors1.delete(); descriptors2.delete();
-                    detector.delete();
-                    return 0;
-                }
-
-                // BruteForce Matcher
-                const bf = new cv.BFMatcher(cv.NORM_L2, false);
-                const knnMatches = new cv.DMatchVectorVector();
-                bf.knnMatch(descriptors1, descriptors2, knnMatches, 2);
-
-                // Lowe's Ratio Test
-                const goodMatches = new cv.DMatchVector();
-                for (let i = 0; i < knnMatches.size(); i++) {
-                    const match = knnMatches.get(i);
-                    if (match.size() === 2) {
-                        const m = match.get(0);
-                        const n = match.get(1);
-                        if (m.distance < 0.75 * n.distance) {
-                            goodMatches.push_back(m);
-                        }
-                    }
-                }
-
-                if (goodMatches.size() < 4) {
-                    keypoints1.delete(); keypoints2.delete();
-                    descriptors1.delete(); descriptors2.delete();
-                    knnMatches.delete(); goodMatches.delete();
-                    bf.delete(); detector.delete();
-                    return 0;
-                }
-
-                // RANSAC للتحقق الهندسي
-                const srcPoints = new cv.Mat(goodMatches.size(), 1, cv.CV_32FC2);
-                const dstPoints = new cv.Mat(goodMatches.size(), 1, cv.CV_32FC2);
-                
-                for (let i = 0; i < goodMatches.size(); i++) {
-                    const queryIdx = goodMatches.get(i).queryIdx;
-                    const trainIdx = goodMatches.get(i).trainIdx;
-                    
-                    const pt1 = keypoints1.get(queryIdx).pt;
-                    const pt2 = keypoints2.get(trainIdx).pt;
-                    
-                    srcPoints.data32F[i * 2] = pt1.x;
-                    srcPoints.data32F[i * 2 + 1] = pt1.y;
-                    dstPoints.data32F[i * 2] = pt2.x;
-                    dstPoints.data32F[i * 2 + 1] = pt2.y;
-                }
-
-                const homography = new cv.Mat();
-                const inlierMask = new cv.Mat();
-                
-                cv.findHomography(srcPoints, dstPoints, cv.RANSAC, 5.0, inlierMask);
-
-                // حساب نسبة Inliers
-                let inliers = 0;
-                for (let i = 0; i < inlierMask.rows; i++) {
-                    if (inlierMask.data[i] === 1) inliers++;
-                }
-
-                const inlierRatio = inliers / goodMatches.size();
-                const matchScore = inlierRatio * 100;
-
-                // تنظيف
-                keypoints1.delete(); keypoints2.delete();
-                descriptors1.delete(); descriptors2.delete();
-                knnMatches.delete(); goodMatches.delete();
-                srcPoints.delete(); dstPoints.delete();
-                homography.delete(); inlierMask.delete();
-                bf.delete(); detector.delete();
-
-                return matchScore;
-            } catch (err) {
-                console.error('SIFT/RANSAC error:', err);
+    function compareImagesSIFT_RANSAC(mat1, mat2) {
+        try {
+            let detector;
+            try { detector = new cv.SIFT(); } catch (e) { detector = new cv.ORB(1000); }
+            const kp1 = new cv.KeyPointVector(), kp2 = new cv.KeyPointVector();
+            const desc1 = new cv.Mat(), desc2 = new cv.Mat();
+            detector.detectAndCompute(mat1, new cv.Mat(), kp1, desc1);
+            detector.detectAndCompute(mat2, new cv.Mat(), kp2, desc2);
+            if (desc1.rows < 10 || desc2.rows < 10) {
+                kp1.delete(); kp2.delete(); desc1.delete(); desc2.delete(); detector.delete();
                 return 0;
             }
-        }
-
-        // ================= مقارنة الميزات الهندسية =================
-        function compareGeometricFeatures(features1, features2) {
-            let score = 0;
-
-            const aspectDiff = Math.abs(features1.aspectRatio - features2.aspectRatio);
-            score += Math.max(0, 100 - (aspectDiff * 200)) * 0.3;
-
-            const circleDiff = Math.abs(features1.circleCount - features2.circleCount);
-            score += (circleDiff === 0 ? 100 : Math.max(0, 100 - (circleDiff * 30))) * 0.25;
-
-            const areaDiff = Math.abs(features1.circleAreaRatio - features2.circleAreaRatio);
-            score += Math.max(0, 100 - (areaDiff * 500)) * 0.25;
-
-            const edgeDiff = Math.abs(features1.edgeDensity - features2.edgeDensity);
-            score += Math.max(0, 100 - (edgeDiff * 300)) * 0.2;
-
-            return score;
-        }
-
-        // ================= Tab Switching =================
-        window.switchTab = (tab) => {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-            if (tab === 'admin') {
-                document.querySelector('.tab:first-child').classList.add('active');
-                document.getElementById('adminSection').classList.add('active');
-                renderGrid();
-            } else {
-                document.querySelector('.tab:last-child').classList.add('active');
-                document.getElementById('searchSection').classList.add('active');
-            }
-        };
-
-        // ================= Camera Functions =================
-        window.startCam = async (num) => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                document.getElementById(`vid${num}`).srcObject = stream;
-                streams[num] = stream;
-            } catch (e) { alert('❌ يرجى السماح بالوصول للكاميرا'); }
-        };
-
-        window.capture = (num) => {
-            const video = document.getElementById(`vid${num}`);
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            document.getElementById(`prev${num}`).src = dataUrl;
-            document.getElementById(`prev${num}`).style.display = 'block';
-            video.style.display = 'none';
-            if (streams[num]) streams[num].getTracks().forEach(t => t.stop());
-            const keys = { 1: 'cam', 2: 'btn', 3: 'fin', 4: 'full' };
-            adminImages[keys[num]] = dataUrl;
-        };
-
-        window.startSearchCam = async (num) => {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-                document.getElementById(`sVid${num}`).srcObject = stream;
-                streams[`s${num}`] = stream;
-            } catch (e) { alert('❌ يرجى السماح بالوصول للكاميرا'); }
-        };
-
-        window.captureSearch = (num) => {
-            const video = document.getElementById(`sVid${num}`);
-            const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            document.getElementById(`sPrev${num}`).src = dataUrl;
-            document.getElementById(`sPrev${num}`).style.display = 'block';
-            video.style.display = 'none';
-            if (streams[`s${num}`]) streams[`s${num}`].getTracks().forEach(t => t.stop());
-            const keys = { 1: 'cam', 2: 'btn', 3: 'fin', 4: 'full' };
-            searchImages[keys[num]] = dataUrl;
-        };
-
-        // ================= ImgBB Upload =================
-        async function uploadToImgBB(base64Data, name) {
-            const formData = new FormData();
-            formData.append('key', IMGBB_API_KEY);
-            formData.append('image', base64Data.split(',')[1]);
-            formData.append('name', name);
-            const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
-            const data = await res.json();
-            if (data.success) return data.data.url;
-            throw new Error('فشل رفع الصورة');
-        }
-
-        // ================= Save Case =================
-        window.saveCase = async () => {
-            const model = document.getElementById('deviceModel').value.trim();
-            const type = document.getElementById('caseType').value;
-            const price = document.getElementById('casePrice').value;
-            const qty = parseInt(document.getElementById('caseQuantity').value) || 1;
-            const col = parseInt(document.getElementById('selCol').value);
-            const row = parseInt(document.getElementById('selRow').value);
-
-            if (!model || !adminImages.cam || !adminImages.btn || !adminImages.fin || !adminImages.full) {
-                alert('❌ يرجى التقاط الصور الأربع');
-                return;
-            }
-
-            if (!cvReady || !tfReady) {
-                alert('⏳ انتظر حتى تحميل جميع المكتبات');
-                return;
-            }
-
-            const btn = document.querySelector('#adminSection .btn-primary');
-            btn.textContent = '⏳ جاري استخراج الميزات...';
-            btn.disabled = true;
-
-            try {
-                // ضغط الصور
-                const compressedCam = await compressImage(adminImages.cam, 400, 0.6);
-                const compressedBtn = await compressImage(adminImages.btn, 400, 0.6);
-                const compressedFin = await compressImage(adminImages.fin, 400, 0.6);
-                const compressedFull = await compressImage(adminImages.full, 400, 0.6);
-
-                // استخراج الميزات
-                const featuresCam = await extractGeometricFeatures(compressedCam);
-                const featuresFull = await extractGeometricFeatures(compressedFull);
-                const mobilenetCam = await extractMobileNetFeatures(compressedCam);
-                const mobilenetFull = await extractMobileNetFeatures(compressedFull);
-                const colorHistCam = await extractColorHistogram(compressedCam);
-                const colorHistFull = await extractColorHistogram(compressedFull);
-
-                const timestamp = Date.now();
-                
-                // رفع الصور
-                const urlCam = await uploadToImgBB(compressedCam, `${model}_cam_${timestamp}`);
-                const urlBtn = await uploadToImgBB(compressedBtn, `${model}_btn_${timestamp}`);
-                const urlFin = await uploadToImgBB(compressedFin, `${model}_fin_${timestamp}`);
-                const urlFull = await uploadToImgBB(compressedFull, `${model}_full_${timestamp}`);
-
-                // حفظ في Firestore
-                await addDoc(collection(db, 'cases'), {
-                    device_model: model,
-                    case_type: type,
-                    price: Number(price),
-                    quantity: qty,
-                    location: { column: col, row: row },
-                    images: { 
-                    camera: urlCam, 
-                        buttons: urlBtn, 
-                        fingerprint: urlFin,
-                        full: urlFull
-                    },
-                    features: {
-                        geometric: { camera: featuresCam, full: featuresFull },
-                        mobilenet: { camera: mobilenetCam, full: mobilenetFull },
-                        colorHist: { camera: colorHistCam, full: colorHistFull }
-                    },
-                    added_at: new Date().toISOString()
-                });
-
-                alert(`✅ تم الحفظ بنجاح!\nالموقع: عمود ${col} - صف ${row}\nتم استخراج وحفظ جميع الميزات المتقدمة.`);
-                
-                // إعادة تعيين النموذج
-                document.getElementById('deviceModel').value = '';
-                document.getElementById('casePrice').value = '';
-                document.getElementById('caseQuantity').value = '1';
-                adminImages = { cam: null, btn: null, fin: null, full: null };
-                document.querySelectorAll('#adminSection .preview-img').forEach(img => {
-                    img.style.display = 'none';
-                    img.previousElementSibling.style.display = 'block';
-                });
-                renderGrid();
-            } catch (err) {
-                console.error('Save error:', err);
-                alert('❌ خطأ: ' + err.message);
-            } finally {
-                btn.textContent = '💾 حفظ الكفر (مع استخراج الميزات)';
-                btn.disabled = false;
-            }
-        };
-
-        // ================= حذف كفر =================
-        window.deleteCase = async (docId) => {
-            if (!confirm('هل أنت متأكد من حذف هذا الكفر نهائياً؟')) return;
-            try {
-                await deleteDoc(doc(db, 'cases', docId));
-                alert('✅ تم الحذف بنجاح');
-                renderGrid();
-            } catch (err) {
-                alert('❌ خطأ في الحذف: ' + err.message);
-            }
-        };
-
-        // ================= عرض شبكة المخزن =================
-        window.renderGrid = async () => {
-            const cols = parseInt(document.getElementById('totalCols').value) || 5;
-            const rows = parseInt(document.getElementById('totalRows').value) || 5;
+            const bf = new cv.BFMatcher(cv.NORM_L2, false);
+            const matches = new cv.DMatchVectorVector();
+            bf.knnMatch(desc1, desc2, matches, 2);
             
-            const selCol = document.getElementById('selCol');
-            const selRow = document.getElementById('selRow');
-            selCol.innerHTML = ''; selRow.innerHTML = '';
-            for(let i=1; i<=cols; i++) selCol.innerHTML += `<option value="${i}">${i}</option>`;
-            for(let i=1; i<=rows; i++) selRow.innerHTML += `<option value="${i}">${i}</option>`;
+            const good = new cv.DMatchVector();
+            for (let i = 0; i < matches.size(); i++) {
+                const m = matches.get(i);
+                if (m.size() === 2 && m.get(0).distance < 0.75 * m.get(1).distance) good.push_back(m.get(0));
+            }
+            
+            let score = 0;
+            if (good.size() >= 4) {
+                const srcPts = new cv.Mat(good.size(), 1, cv.CV_32FC2);
+                const dstPts = new cv.Mat(good.size(), 1, cv.CV_32FC2);
+                for (let i = 0; i < good.size(); i++) {
+                    srcPts.data32F[i*2] = kp1.get(good.get(i).queryIdx).pt.x;
+                    srcPts.data32F[i*2+1] = kp1.get(good.get(i).queryIdx).pt.y;
+                    dstPts.data32F[i*2] = kp2.get(good.get(i).trainIdx).pt.x;
+                    dstPts.data32F[i*2+1] = kp2.get(good.get(i).trainIdx).pt.y;
+                }
+                const inlierMask = new cv.Mat();
+                cv.findHomography(srcPts, dstPts, cv.RANSAC, 5.0, inlierMask);
+                let inliers = 0;
+                for (let i = 0; i < inlierMask.rows; i++) if (inlierMask.data[i] === 1) inliers++;
+                score = (inliers / good.size()) * 100;
+                srcPts.delete(); dstPts.delete(); inlierMask.delete();
+            }
+            kp1.delete(); kp2.delete(); desc1.delete(); desc2.delete(); matches.delete(); good.delete(); bf.delete(); detector.delete();
+            return score;
+        } catch (e) { return 0; }
+    }
 
-            const grid = document.getElementById('storageGrid');
-            grid.innerHTML = '';
-            grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+    function compareGeometricFeatures(f1, f2) {
+        let score = 0;
+        score += Math.max(0, 100 - (Math.abs(f1.aspectRatio - f2.aspectRatio) * 200)) * 0.4;
+        score += (f1.circleCount === f2.circleCount ? 100 : Math.max(0, 100 - (Math.abs(f1.circleCount - f2.circleCount) * 30))) * 0.4;
+        score += Math.max(0, 100 - (Math.abs(f1.edgeDensity - f2.edgeDensity) * 300)) * 0.2;
+        return score;
+    }
+
+    function base64ToMat(base64Data) {
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                const src = cv.imread(canvas);
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
+                src.delete();
+                resolve(gray);
+            };
+            img.src = base64Data;
+        });
+    }
+
+    function loadImageAsBase64(url) {
+        return new Promise((resolve, reject) => {
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.getContext('2d').drawImage(img, 0, 0);
+                resolve(canvas.toDataURL('image/jpeg', 0.8));
+            };
+            img.onerror = reject;
+            img.src = url;
+        });
+    }
+
+    async function uploadToImgBB(base64Data, name) {
+        const formData = new FormData();
+        formData.append('key', IMGBB_API_KEY);
+        formData.append('image', base64Data.split(',')[1]);
+        formData.append('name', name);
+        const res = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: formData });
+        const data = await res.json();
+        if (data.success) return data.data.url;
+        throw new Error('فشل رفع الصورة');
+    }
+
+    // ================= 4. ربط الدوال بـ window لتعمل مع HTML =================
+    window.switchTab = (tab) => {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        if (tab === 'admin') {
+            document.querySelector('.tab:first-child').classList.add('active');
+            document.getElementById('adminSection').classList.add('active');
+            window.renderGrid();
+        } else {
+            document.querySelector('.tab:last-child').classList.add('active');
+            document.getElementById('searchSection').classList.add('active');
+        }
+    };
+
+    window.startCam = async (num) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            document.getElementById(`vid${num}`).srcObject = stream;
+            streams[num] = stream;
+        } catch (e) { alert('❌ يرجى السماح بالوصول للكاميرا'); }
+    };
+
+    window.capture = (num) => {
+        const video = document.getElementById(`vid${num}`);
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        document.getElementById(`prev${num}`).src = dataUrl;
+        document.getElementById(`prev${num}`).style.display = 'block';
+        video.style.display = 'none';
+        if (streams[num]) streams[num].getTracks().forEach(t => t.stop());
+        const keys = { 1: 'cam', 2: 'btn', 3: 'fin', 4: 'full' };
+        adminImages[keys[num]] = dataUrl;
+    };
+
+    window.startSearchCam = async (num) => {
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            document.getElementById(`sVid${num}`).srcObject = stream;
+            streams[`s${num}`] = stream;
+        } catch (e) { alert('❌ يرجى السماح بالوصول للكاميرا'); }
+    };
+
+    window.captureSearch = (num) => {
+        const video = document.getElementById(`sVid${num}`);
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
+        document.getElementById(`sPrev${num}`).src = dataUrl;
+        document.getElementById(`sPrev${num}`).style.display = 'block';
+        video.style.display = 'none';
+        if (streams[`s${num}`]) streams[`s${num}`].getTracks().forEach(t => t.stop());
+        const keys = { 1: 'cam', 2: 'btn', 3: 'fin', 4: 'full' };
+        searchImages[keys[num]] = dataUrl;
+    };
+
+    window.saveCase = async () => {
+        const model = document.getElementById('deviceModel').value.trim();
+        const type = document.getElementById('caseType').value;
+        const price = document.getElementById('casePrice').value;
+        const qty = parseInt(document.getElementById('caseQuantity').value) || 1;
+        const col = parseInt(document.getElementById('selCol').value);
+        const row = parseInt(document.getElementById('selRow').value);
+
+        if (!model || !adminImages.cam || !adminImages.btn || !adminImages.fin || !adminImages.full) {
+            alert('❌ يرجى التقاط الصور الأربع'); return;
+        }
+        if (!cvReady || !tfReady) {
+            alert('⏳ انتظر قليلاً حتى يتم تحميل المكتبات (تحقق من الشريط العلوي)'); return;
+        }
+
+        const btn = document.querySelector('#adminSection .btn-primary');
+        btn.textContent = '⏳ جاري المعالجة...'; btn.disabled = true;
+
+        try {
+            const cCam = await compressImage(adminImages.cam, 400, 0.6);
+            const cBtn = await compressImage(adminImages.btn, 400, 0.6);
+            const cFin = await compressImage(adminImages.fin, 400, 0.6);
+            const cFull = await compressImage(adminImages.full, 400, 0.6);
+
+            const fCam = await extractGeometricFeatures(cCam);
+            const fFull = await extractGeometricFeatures(cFull);
+            const nCam = await extractMobileNetFeatures(cCam);
+            const nFull = await extractMobileNetFeatures(cFull);
+            const hCam = await extractColorHistogram(cCam);
+            const hFull = await extractColorHistogram(cFull);
+
+            const ts = Date.now();
+            const urlCam = await uploadToImgBB(cCam, `${model}_cam_${ts}`);
+            const urlBtn = await uploadToImgBB(cBtn, `${model}_btn_${ts}`);
+            const urlFin = await uploadToImgBB(cFin, `${model}_fin_${ts}`);
+            const urlFull = await uploadToImgBB(cFull, `${model}_full_${ts}`);
+
+            await addDoc(collection(db, 'cases'), {
+                device_model: model, case_type: type, price: Number(price), quantity: qty,
+                location: { column: col, row: row },
+                images: { camera: urlCam, buttons: urlBtn, fingerprint: urlFin, full: urlFull },
+                features: {
+                    geometric: { camera: fCam, full: fFull },
+                    mobilenet: { camera: nCam, full: nFull },
+                    colorHist: { camera: hCam, full: hFull }
+                },
+                added_at: new Date().toISOString()
+            });
+
+            alert(`✅ تم الحفظ!\nالموقع: عمود ${col} - صف ${row}`);
+            document.getElementById('deviceModel').value = '';
+            document.getElementById('casePrice').value = '';
+            document.getElementById('caseQuantity').value = '1';
+            adminImages = { cam: null, btn: null, fin: null, full: null };
+            document.querySelectorAll('#adminSection .preview-img').forEach(img => {
+                img.style.display = 'none'; img.previousElementSibling.style.display = 'block';
+            });
+            window.renderGrid();
+        } catch (err) {
+            alert('❌ خطأ: ' + err.message);
+        } finally {
+            btn.textContent = '💾 حفظ الكفر (مع استخراج الميزات)';
+            btn.disabled = false;
+        }
+    };
+
+    window.deleteCase = async (docId) => {
+        if (!confirm('هل أنت متأكد من حذف هذا الكفر نهائياً؟')) return;
+        try {
+            await deleteDoc(doc(db, 'cases', docId));
+            alert('✅ تم الحذف بنجاح');
+            window.renderGrid();
+        } catch (err) {
+            alert('❌ خطأ في الحذف: ' + err.message);
+        }
+    };
+
+    window.renderGrid = async () => {
+        const cols = parseInt(document.getElementById('totalCols').value) || 5;
+        const rows = parseInt(document.getElementById('totalRows').value) || 5;
+        const selCol = document.getElementById('selCol');
+        const selRow = document.getElementById('selRow');
+        selCol.innerHTML = ''; selRow.innerHTML = '';
+        for(let i=1; i<=cols; i++) selCol.innerHTML += `<option value="${i}">${i}</option>`;
+        for(let i=1; i<=rows; i++) selRow.innerHTML += `<option value="${i}">${i}</option>`;
+
+        const grid = document.getElementById('storageGrid');
+        grid.innerHTML = '';
+        grid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+
+        const snapshot = await getDocs(collection(db, 'cases'));
+        const locationMap = {};
+        snapshot.forEach(d => {
+            const data = d.data();
+            const key = `${data.location.column}-${data.location.row}`;
+            if (!locationMap[key]) locationMap[key] = [];
+            locationMap[key].push({ id: d.id, ...data });
+        });
+
+        for (let r = 1; r <= rows; r++) {
+            for (let c = 1; c <= cols; c++) {
+                const cell = document.createElement('div');
+                const key = `${c}-${r}`;
+                const casesInCell = locationMap[key] || [];
+                cell.className = `grid-cell ${casesInCell.length > 0 ? 'occupied' : ''}`;
+                
+                if (casesInCell.length > 0) {
+                    const totalQty = casesInCell.reduce((sum, item) => sum + (item.quantity || 1), 0);
+                    const modelNames = casesInCell.map(item => item.device_model).join(' + ');
+                    const delBtns = casesInCell.map(item => `<button class="delete-btn" onclick="window.deleteCase('${item.id}')" title="حذف">×</button>`).join('');
+                    cell.innerHTML = `${delBtns}<div class="loc">عمود ${c} | صف ${r}</div><div class="device" style="font-size:12px;">${modelNames}</div><div class="count-badge">العدد: ${totalQty}</div>`;
+                } else {
+                    cell.innerHTML = `<div class="loc" style="color:#999;">عمود ${c} | صف ${r}</div><div style="color:#ccc;">فارغ</div>`;
+                }
+                grid.appendChild(cell);
+            }
+        }
+    };
+
+    window.searchCase = async () => {
+        if (!cvReady || !tfReady) { alert('⏳ انتظر تحميل المكتبات'); return; }
+        if (!searchImages.cam || !searchImages.btn || !searchImages.fin || !searchImages.full) { alert('❌ يرجى التقاط الصور الأربع'); return; }
+
+        const loading = document.getElementById('loading');
+        const resultsArea = document.getElementById('resultsArea');
+        const progressFill = document.getElementById('progressFill');
+        const loadingText = document.getElementById('loadingText');
+        const searchBtn = document.getElementById('searchBtn');
+
+        loading.style.display = 'block';
+        resultsArea.style.display = 'none';
+        searchBtn.disabled = true;
+
+        try {
+            loadingText.textContent = 'جاري معالجة صور البحث...';
+            const cSearchCam = await correctPerspective(searchImages.cam);
+            const cSearchFull = await correctPerspective(searchImages.full);
+            const roiSCam = await extractROI(cSearchCam, 'camera');
+            const roiSFull = await extractROI(cSearchFull, 'full');
+
+            const qGeoCam = await extractGeometricFeatures(roiSCam);
+            const qGeoFull = await extractGeometricFeatures(roiSFull);
+            const qHistCam = await extractColorHistogram(roiSCam);
+            const qHistFull = await extractColorHistogram(roiSFull);
+            const qNetCam = await extractMobileNetFeatures(roiSCam);
+            const qNetFull = await extractMobileNetFeatures(roiSFull);
 
             const snapshot = await getDocs(collection(db, 'cases'));
-            const locationMap = {};
-            
-            snapshot.forEach(d => {
+            const results = [];
+            const totalDocs = snapshot.size;
+            let processed = 0;
+
+            for (const d of snapshot.docs) {
                 const data = d.data();
-                const key = `${data.location.column}-${data.location.row}`;
-                if (!locationMap[key]) locationMap[key] = [];
-                locationMap[key].push({ id: d.id, ...data });
-            });
+                processed++;
+                loadingText.textContent = `جاري المطابقة... (${processed}/${totalDocs})`;
+                progressFill.style.width = `${(processed / totalDocs) * 100}%`;
 
-            for (let r = 1; r <= rows; r++) {
-                for (let c = 1; c <= cols; c++) {
-                    const cell = document.createElement('div');
-                    const key = `${c}-${r}`;
-                    const casesInCell = locationMap[key] || [];
+                try {
+                    if (Math.abs(qGeoCam.circleCount - data.features.geometric.camera.circleCount) > 1) continue;
+
+                    const sCam = await loadImageAsBase64(data.images.camera);
+                    const sFull = await loadImageAsBase64(data.images.full);
+                    const cSCam = await correctPerspective(sCam);
+                    const cSFull = await correctPerspective(sFull);
+                    const roiStCam = await extractROI(cSCam, 'camera');
+                    const roiStFull = await extractROI(cSFull, 'full');
+
+                    const netS = (compareMobileNetEmbeddings(qNetCam, data.features.mobilenet.camera) + compareMobileNetEmbeddings(qNetFull, data.features.mobilenet.full)) / 2;
                     
-                    cell.className = `grid-cell ${casesInCell.length > 0 ? 'occupied' : ''}`;
+                    const mQCam = await base64ToMat(roiSCam);
+                    const mStCam = await base64ToMat(roiStCam);
+                    const siftCam = compareImagesSIFT_RANSAC(mQCam, mStCam);
+                    mQCam.delete(); mStCam.delete();
+
+                    const mQFull = await base64ToMat(roiSFull);
+                    const mStFull = await base64ToMat(roiStFull);
+                    const siftFull = compareImagesSIFT_RANSAC(mQFull, mStFull);
+                    mQFull.delete(); mStFull.delete();
                     
-                    if (casesInCell.length > 0) {
-                        const totalQty = casesInCell.reduce((sum, item) => sum + (item.quantity || 1), 0);
-                        const modelNames = casesInCell.map(item => item.device_model).join(' + ');
-                        const deleteButtons = casesInCell.map(item => 
-                            `<button class="delete-btn" onclick="deleteCase('${item.id}')" title="حذف ${item.device_model}">×</button>`
-                        ).join('');
-                        
-                        cell.innerHTML = `
-                            ${deleteButtons}
-                            <div class="loc">عمود ${c} | صف ${r}</div>
-                            <div class="device" style="font-size:12px;">${modelNames}</div>
-                            <div class="count-badge">العدد: ${totalQty}</div>
-                        `;
-                    } else {
-                        cell.innerHTML = `<div class="loc" style="color:#999;">عمود ${c} | صف ${r}</div><div style="color:#ccc;">فارغ</div>`;
+                    const siftS = (siftCam + siftFull) / 2;
+                    const histS = (compareColorHistograms(qHistCam, data.features.colorHist.camera) + compareColorHistograms(qHistFull, data.features.colorHist.full)) / 2;
+                    const geoS = (compareGeometricFeatures(qGeoCam, data.features.geometric.camera) + compareGeometricFeatures(qGeoFull, data.features.geometric.full)) / 2;
+
+                    const finalScore = (netS * 0.40) + (siftS * 0.35) + (histS * 0.15) + (geoS * 0.10);
+
+                    if (finalScore > 25) {
+                        results.push({
+                            id: d.id, ...data, matchScore: Math.round(finalScore),
+                            breakdown: { net: Math.round(netS), sift: Math.round(siftS), hist: Math.round(histS), geo: Math.round(geoS) }
+                        });
                     }
-                    grid.appendChild(cell);
-                }
+                } catch (err) { console.error('Error:', err); }
+                await new Promise(r => setTimeout(r, 10));
             }
-        };
 
-        // ================= تحميل صورة من URL للمعالجة =================
-        function loadImageAsBase64(url) {
-            return new Promise((resolve, reject) => {
-                const img = new Image();
-                img.crossOrigin = 'anonymous'; // مهم لتجنب مشاكل CORS
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    resolve(canvas.toDataURL('image/jpeg', 0.8));
-                };
-                img.onerror = reject;
-                img.src = url;
-            });
-            
+            results.sort((a, b) => b.matchScore - a.matchScore);
+            const resultsGrid = document.getElementById('resultsGrid');
+            resultsGrid.innerHTML = '';
+
+            if (results.length === 0) {
+                resultsGrid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; color: #666;">لا توجد نتائج متطابقة.</p>';
+            } else {
+                const typeNames = { silicone: 'سيليكون', clear: 'شفاف', armor: 'حماية قوية', wallet: 'محفظة', leather: 'جلد' };
+                results.slice(0, 8).forEach(res => {
+                    const card = document.createElement('div');
+                    card.className = 'result-card';
+                    let scoreClass = res.matchScore >= 65 ? 'high' : (res.matchScore >= 45 ? 'medium' : 'low');
+                    card.innerHTML = `
+                        <img src="${res.images.camera}" alt="${res.device_model}">
+                        <h3>${res.device_model}</h3>
+                        <div style="color:#666; font-size:14px;">${typeNames[res.case_type] || res.case_type}</div>
+                        <div class="location-badge">📍 عمود ${res.location.column} - صف ${res.location.row}</div>
+                        <div class="price">${res.price} دينار</div>
+                        <div class="match-score ${scoreClass}">الدقة النهائية: ${res.matchScore}%</div>
+                        <div class="score-breakdown">🧠 ذكاء: ${res.breakdown.net}% | 📐 SIFT: ${res.breakdown.sift}%<br>🎨 ألوان: ${res.breakdown.hist}% | 📏 هندسي: ${res.breakdown.geo}%</div>
+                    `;
+                    resultsGrid.appendChild(card);
+                });
+            }
+            loading.style.display = 'none';
+            resultsArea.style.display = 'block';
+        } catch (err) {
+            alert('❌ خطأ: ' + err.message);
+            loading.style.display = 'none';
+        } finally {
+            searchBtn.disabled = false;
         }
-           // ================= البحث المتقدم (الدمج النهائي) =================
-        window.searchCase = async () => {
-            if (!cvReady || !tfReady) {
-                alert('⏳ انتظر حتى تحميل جميع المكتبات (OpenCV + TensorFlow)');
-                return;
-            }
+    };
 
-            if (!searchImages.cam || !searchImages.btn || !searchImages.fin || !searchImages.full) {
-                alert('❌ يرجى التقاط الصور الأربع للجهاز');
-                return;
-            }
-
-            const loading = document.getElementById('loading');
-            const resultsArea = document.getElementById('resultsArea');
-            const progressFill = document.getElementById('progressFill');
-            const loadingText = document.getElementById('loadingText');
-            const searchBtn = document.getElementById('searchBtn');
-
-            loading.style.display = 'block';
-            resultsArea.style.display = 'none';
-            searchBtn.disabled = true;
-
-            try {
-                loadingText.textContent = 'جاري معالجة صور البحث (تصحيح المنظور + ROI)...';
-                
-                // 1. معالجة صور البحث مسبقاً
-                const correctedSearchCam = await correctPerspective(searchImages.cam);
-                const correctedSearchFull = await correctPerspective(searchImages.full);
-                
-                const roiSearchCam = await extractROI(correctedSearchCam, 'camera');
-                const roiSearchFull = await extractROI(correctedSearchFull, 'full');
-
-                // استخراج ميزات صور البحث
-                const queryGeoCam = await extractGeometricFeatures(roiSearchCam);
-                const queryGeoFull = await extractGeometricFeatures(roiSearchFull);
-                const queryHistCam = await extractColorHistogram(roiSearchCam);
-                const queryHistFull = await extractColorHistogram(roiSearchFull);
-                const queryNetCam = await extractMobileNetFeatures(roiSearchCam);
-                const queryNetFull = await extractMobileNetFeatures(roiSearchFull);
-
-                const snapshot = await getDocs(collection(db, 'cases'));
-                const results = [];
-                const totalDocs = snapshot.size;
-                let processed = 0;
-
-                for (const d of snapshot.docs) {
-                    const data = d.data();
-                    processed++;
-                    loadingText.textContent = `جاري المطابقة المتقدمة... (${processed}/${totalDocs})`;
-                    progressFill.style.width = `${(processed / totalDocs) * 100}%`;
-
-                    try {
-                        // 2. Pre-Filtering (التصفية المسبقة السريعة)
-                        // إذا كان عدد الكاميرات مختلفاً تماماً، نعطيه درجة منخفضة جداً فوراً
-                        const camDiff = Math.abs(queryGeoCam.circleCount - data.features.geometric.camera.circleCount);
-                        if (camDiff > 1) {
-                            // تخطي المعالجة الثقيلة وتوفيراً للوقت
-                            continue; 
-                        }
-
-                        // 3. تحميل ومعالجة الصورة المخزنة
-                        const storedCamBase64 = await loadImageAsBase64(data.images.camera);
-                        const storedFullBase64 = await loadImageAsBase64(data.images.full);
-                        
-                        const correctedStoredCam = await correctPerspective(storedCamBase64);
-                        const correctedStoredFull = await correctPerspective(storedFullBase64);
-                        
-                        const roiStoredCam = await extractROI(correctedStoredCam, 'camera');
-                        const roiStoredFull = await extractROI(correctedStoredFull, 'full');
-
-                        // 4. حساب الدرجات الفرعية
-                        
-                        // أ) MobileNet Embeddings (40%)
-                        const netScoreCam = compareMobileNetEmbeddings(queryNetCam, data.features.mobilenet.camera);
-                        const netScoreFull = compareMobileNetEmbeddings(queryNetFull, data.features.mobilenet.full);
-                        const finalNetScore = (netScoreCam + netScoreFull) / 2;
-
-                        // ب) SIFT + RANSAC (35%)
-                        const matQueryCam = await base64ToMat(roiSearchCam);
-                        const matStoredCam = await base64ToMat(roiStoredCam);
-                        const siftScoreCam = compareImagesSIFT_RANSAC(matQueryCam, matStoredCam);
-                        matQueryCam.delete(); matStoredCam.delete();
-
-                        const matQueryFull = await base64ToMat(roiSearchFull);
-                        const matStoredFull = await base64ToMat(roiStoredFull);
-                        const siftScoreFull = compareImagesSIFT_RANSAC(matQueryFull, matStoredFull);
-                        matQueryFull.delete(); matStoredFull.delete();
-                        
-                        const finalSiftScore = (siftScoreCam + siftScoreFull) / 2;
-
-                        // ج) Color Histogram (15%)
-                        const histScoreCam = compareColorHistograms(queryHistCam, data.features.colorHist.camera);
-                        const histScoreFull = compareColorHistograms(queryHistFull, data.features.colorHist.full);
-                        const finalHistScore = (histScoreCam + histScoreFull) / 2;
-
-                        // د) Geometric Features (10%)
-                        const geoScoreCam = compareGeometricFeatures(queryGeoCam, data.features.geometric.camera);
-                        const geoScoreFull = compareGeometricFeatures(queryGeoFull, data.features.geometric.full);
-                        const finalGeoScore = (geoScoreCam + geoScoreFull) / 2;
-
-                        // 5. الدرجة النهائية المرجحة
-                        const finalScore = (finalNetScore * 0.40) + (finalSiftScore * 0.35) + (finalHistScore * 0.15) + (finalGeoScore * 0.10);
-
-                        if (finalScore > 25) { // حد أدنى معقول للعرض
-                            results.push({
-                                id: d.id,
-                                ...data,
-                                matchScore: Math.round(finalScore),
-                                breakdown: {
-                                    net: Math.round(finalNetScore),
-                                    sift: Math.round(finalSiftScore),
-                                    hist: Math.round(finalHistScore),
-                                    geo: Math.round(finalGeoScore)
-                                }
-                            });
-                        }
-                    } catch (err) {
-                        console.error('Error processing case:', data.device_model, err);
-                        // الاستمرار مع العنصر التالي حتى لو فشل واحد
-                    }
-
-                    // تأخير صغير لمنع تجميد المتصفح
-                    await new Promise(resolve => setTimeout(resolve, 20));
-                }
-
-                // ترتيب النتائج
-                results.sort((a, b) => b.matchScore - a.matchScore);
-
-                // عرض النتائج
-                const resultsGrid = document.getElementById('resultsGrid');
-                resultsGrid.innerHTML = '';
-
-                if (results.length === 0) {
-                    resultsGrid.innerHTML = '<p style="text-align:center; grid-column: 1/-1; color: #666; padding: 20px;">لا توجد نتائج متطابقة بدقة كافية. جرب تصويراً أوضح أو من زاوية مختلفة.</p>';
-                } else {
-                    const typeNames = { silicone: 'سيليكون', clear: 'شفاف', armor: 'حماية قوية', wallet: 'محفظة', leather: 'جلد' };
-                    results.slice(0, 8).forEach(res => { // عرض أفضل 8 نتائج فقط
-                        const card = document.createElement('div');
-                        card.className = 'result-card';
-                        
-                        let scoreClass = 'low';
-                        if (res.matchScore >= 65) scoreClass = 'high';
-                        else if (res.matchScore >= 45) scoreClass = 'medium';
-
-                        card.innerHTML = `
-                            <img src="${res.images.camera}" alt="${res.device_model}">
-                            <h3>${res.device_model}</h3>
-                            <div style="color:#666; font-size:14px;">${typeNames[res.case_type] || res.case_type}</div>
-                            <div class="location-badge">📍 عمود ${res.location.column} - صف ${res.location.row}</div>
-                            <div class="price">${res.price} دينار</div>
-                            <div style="font-size:13px; color:#555;">الكمية: ${res.quantity || 1}</div>
-                            <div class="match-score ${scoreClass}">
-                                الدقة النهائية: ${res.matchScore}%
-                            </div>
-                            <div class="score-breakdown">
-                                🧠 ذكاء: ${res.breakdown.net}% | 📐 SIFT/RANSAC: ${res.breakdown.sift}%<br>
-                                🎨 ألوان: ${res.breakdown.hist}% | 📏 هندسي: ${res.breakdown.geo}%
-                            </div>
-                        `;
-                        resultsGrid.appendChild(card);
-                    });
-                }
-
-                loading.style.display = 'none';
-                resultsArea.style.display = 'block';
-
-            } catch (err) {
-                console.error('Search error:', err);
-                alert('❌ خطأ في البحث: ' + err.message);
-                loading.style.display = 'none';
-            } finally {
-                searchBtn.disabled = false;
-            }
-        };
-
-        // ================= دالة مساعدة لـ OpenCV Mat =================
-        function base64ToMat(base64Data) {
-            return new Promise((resolve) => {
-                const img = new Image();
-                img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = img.width;
-                    canvas.height = img.height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0);
-                    const src = cv.imread(canvas);
-                    const gray = new cv.Mat();
-                    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-                    cv.GaussianBlur(gray, gray, new cv.Size(5, 5), 0);
-                    src.delete();
-                    resolve(gray);
-                };
-                img.src = base64Data;
-            });
-        }
-
-        // ================= التشغيل الأولي =================
-        window.addEventListener('load', () => {
-            renderGrid();
-        });
-    </script>
+    window.addEventListener('load', () => {
+        window.renderGrid();
+    });
+</script>
 </body>
 </html>     
         
